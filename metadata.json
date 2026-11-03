@@ -1,6 +1,0 @@
-{
-  "name": "Junaliikenne Live – Rail Traffic Monitor",
-  "description": "High-contrast mission-control dashboard for Finnish rail traffic operators, featuring live track network visualization, delay cascading analysis, and rapid dispatch alerts. Designed and developed by Sandeep Pariyar.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

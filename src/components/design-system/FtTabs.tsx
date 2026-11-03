@@ -62,7 +62,7 @@ export const FtTabs: React.FC<FtTabsProps> = ({
             key={tab.id}
             role="tab"
             id={`tab-${tab.id}`}
-            aria-controls={`tabpanel-${tab.id}`}
+            aria-controls={isActive ? `tabpanel-${tab.id}` : undefined}
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(tab.id)}
@@ -78,7 +78,7 @@ export const FtTabs: React.FC<FtTabsProps> = ({
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                   isActive
-                    ? 'bg-[#4DA3FF]/20 text-[#4DA3FF]'
+                    ? 'bg-[#4DA3FF]/20 text-[#80BDFF]'
                     : 'bg-[#243444] text-[#9BA9B8]'
                 }`}
               >

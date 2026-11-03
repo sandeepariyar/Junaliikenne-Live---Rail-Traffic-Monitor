@@ -63,13 +63,13 @@ export class FtStatusBadgeElement extends LitElement {
 
     .variant-danger {
       background-color: rgba(242, 85, 85, 0.15);
-      color: #F25555;
+      color: #FF8080;
       border-color: rgba(242, 85, 85, 0.4);
     }
 
     .variant-info {
       background-color: rgba(77, 163, 255, 0.15);
-      color: #4DA3FF;
+      color: #80BDFF;
       border-color: rgba(77, 163, 255, 0.4);
     }
 

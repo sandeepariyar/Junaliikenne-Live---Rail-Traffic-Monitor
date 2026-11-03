@@ -1,3 +1,4 @@
+import { useModalA11y } from '../hooks/useModalA11y';
 import React, { useState } from 'react';
 import { X, Layers, Code, CheckCircle, ShieldCheck, Eye } from 'lucide-react';
 import { FtStatusBadge } from './design-system/FtStatusBadge';
@@ -20,10 +21,14 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
   const [testTab, setTestTab] = useState('one');
   const [testSegment, setTestSegment] = useState<'2D' | '3D'>('2D');
 
+  const dialogRef = useModalA11y<HTMLDivElement>(!!isOpen, onClose);
+
   if (!isOpen) return null;
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="Design System & Web Components Dokumentaatio"
@@ -37,7 +42,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
         {/* Top Header */}
         <div className="p-4 border-b border-[#243444] bg-[#111822] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-[8px] bg-[#4DA3FF]/20 border border-[#4DA3FF]/40 flex items-center justify-center text-[#4DA3FF]">
+            <div className="w-8 h-8 rounded-[8px] bg-[#4DA3FF]/20 border border-[#4DA3FF]/40 flex items-center justify-center text-[#80BDFF]">
               <Layers size={18} />
             </div>
             <div>
@@ -45,13 +50,14 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
                 Figma & Lit Web Components – Design System Docs
               </h2>
               <p className="text-xs text-[#9BA9B8]">
-                WCAG 2.2 AA compliant tokens, Shadow DOM, high contrast (≥ 4.5:1), keyboard accessible.
+                Design tokens, Shadow DOM components, text contrast ≥ 4.5:1 (checked with axe-core), keyboard operable.
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Sulje / Close"
             className="p-1 rounded text-[#9BA9B8] hover:text-[#F2F5F7] hover:bg-[#1C2836] transition-colors"
           >
             <X size={18} />
@@ -69,7 +75,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
               type="button"
               onClick={() => setSelectedComponent('badge')}
               className={`w-full px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium text-left transition-colors ${
-                selectedComponent === 'badge' ? 'bg-[#1C2836] text-[#4DA3FF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
+                selectedComponent === 'badge' ? 'bg-[#1C2836] text-[#80BDFF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
               }`}
             >
               ft-status-badge
@@ -78,7 +84,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
               type="button"
               onClick={() => setSelectedComponent('card')}
               className={`w-full px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium text-left transition-colors ${
-                selectedComponent === 'card' ? 'bg-[#1C2836] text-[#4DA3FF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
+                selectedComponent === 'card' ? 'bg-[#1C2836] text-[#80BDFF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
               }`}
             >
               ft-alert-card
@@ -87,7 +93,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
               type="button"
               onClick={() => setSelectedComponent('tabs')}
               className={`w-full px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium text-left transition-colors ${
-                selectedComponent === 'tabs' ? 'bg-[#1C2836] text-[#4DA3FF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
+                selectedComponent === 'tabs' ? 'bg-[#1C2836] text-[#80BDFF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
               }`}
             >
               ft-tabs
@@ -96,7 +102,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
               type="button"
               onClick={() => setSelectedComponent('toggle')}
               className={`w-full px-3 py-1.5 rounded-[6px] text-xs font-mono font-medium text-left transition-colors ${
-                selectedComponent === 'toggle' ? 'bg-[#1C2836] text-[#4DA3FF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
+                selectedComponent === 'toggle' ? 'bg-[#1C2836] text-[#80BDFF] border border-[#243444]' : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
               }`}
             >
               ft-toggle & control

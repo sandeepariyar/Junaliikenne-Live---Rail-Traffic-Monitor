@@ -46,7 +46,7 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
               replayMinutes === 0
                 ? 'bg-[#3FB950]/20 text-[#3FB950] border border-[#3FB950]/40'
                 : replayMinutes > 0
-                ? 'bg-[#4DA3FF]/20 text-[#4DA3FF] border border-[#4DA3FF]/40'
+                ? 'bg-[#4DA3FF]/20 text-[#80BDFF] border border-[#4DA3FF]/40'
                 : 'bg-[#F0A030]/20 text-[#F0A030] border border-[#F0A030]/40'
             }`}
           >
@@ -113,7 +113,6 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
           type="button"
           onClick={() => onSeek(0)}
           title="Palaa reaaliaikaan"
-          aria-label="Palaa reaaliaikaan"
           className="px-2 py-1 rounded-[6px] text-xs font-mono font-medium text-[#9BA9B8] hover:text-[#F2F5F7] hover:bg-[#1C2836] border border-[#243444] transition-colors focus-visible:ring-2 focus-visible:ring-[#4DA3FF]"
         >
           Nyt
@@ -153,7 +152,7 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
         <button
           type="button"
           onClick={() => onSeek(30)}
-          className="text-[#4DA3FF] font-medium hover:text-[#F2F5F7] cursor-pointer"
+          className="text-[#80BDFF] font-medium hover:text-[#F2F5F7] cursor-pointer"
         >
           +30 min ennuste
         </button>

@@ -1,3 +1,4 @@
+import { useModalA11y } from '../hooks/useModalA11y';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Train as TrainIcon, Building2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Train, Station, DisturbanceReport, Language } from '../types';
@@ -35,23 +36,8 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
     }
   }, [isOpen]);
 
-  // Global Ctrl+K / Escape listener
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (isOpen) onClose();
-        else {
-          // Open search modal (handled by parent or this component)
-        }
-      }
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+
+  const dialogRef = useModalA11y<HTMLDivElement>(!!isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -70,6 +56,8 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label="Pikahaku"
@@ -82,14 +70,15 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
       >
         {/* Search Input Bar */}
         <div className="p-3 border-b border-[#243444] flex items-center gap-3 bg-[#111822]">
-          <Search size={18} className="text-[#4DA3FF]" />
+          <Search size={18} className="text-[#80BDFF]" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Hae junaa (esim. IC 27), asemaa tai reittiä..."
-            className="flex-1 bg-transparent border-none text-[#F2F5F7] text-sm focus:outline-none placeholder-[#6C7D8F]"
+            aria-label={language === 'fi' ? 'Hae junaa, asemaa tai reittiä' : 'Search train, station or route'}
+            className="flex-1 bg-transparent border-none text-[#F2F5F7] text-sm focus:outline-none placeholder-[#93A3B4]"
           />
           <kbd className="px-1.5 py-0.5 rounded bg-[#16202A] border border-[#243444] text-[10px] font-mono text-[#9BA9B8]">
             ESC
@@ -97,9 +86,10 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label={language === 'fi' ? 'Sulje haku' : 'Close search'}
             className="p-1 rounded text-[#9BA9B8] hover:text-[#F2F5F7]"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -123,7 +113,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                     className="w-full p-2 rounded-[6px] hover:bg-[#1C2836] flex items-center justify-between text-left group transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-[6px] bg-[#111822] border border-[#243444] flex items-center justify-center text-[#4DA3FF]">
+                      <div className="w-7 h-7 rounded-[6px] bg-[#111822] border border-[#243444] flex items-center justify-center text-[#80BDFF]">
                         <TrainIcon size={14} />
                       </div>
                       <div>
@@ -171,7 +161,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                     className="w-full p-2 rounded-[6px] hover:bg-[#1C2836] flex items-center justify-between text-left group transition-colors"
                   >
                     <div className="flex items-center gap-2.5">
-                      <Building2 size={15} className="text-[#4DA3FF]" />
+                      <Building2 size={15} className="text-[#80BDFF]" />
                       <span className="text-sm font-semibold text-[#F2F5F7]">{st.name}</span>
                       <span className="text-xs font-mono text-[#9BA9B8]">({st.code})</span>
                     </div>

@@ -32,7 +32,7 @@ export const AttentionNowRow: React.FC<AttentionNowRowProps> = ({
             <AlertTriangle size={15} className="text-[#F0A030]" aria-hidden="true" />
             <span>{t.huomioNyt}</span>
           </div>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] bg-[#F25555]/20 border border-[#F25555]/40 text-[#F25555] text-[11px] font-bold font-mono">
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] bg-[#F25555]/20 border border-[#F25555]/40 text-[#FF8080] text-[11px] font-bold font-mono">
             {alerts.length}
           </span>
           <span className="text-xs text-[#9BA9B8] hidden sm:inline">

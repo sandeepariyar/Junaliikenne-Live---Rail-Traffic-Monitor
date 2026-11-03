@@ -42,7 +42,7 @@ export class FtToggleElement extends LitElement {
       border-radius: 9999px;
       background-color: #243444;
       transition: background-color 0.2s ease;
-      border: 2px solid transparent;
+      border: 2px solid #8A9AAB; /* >= 3:1 non-text contrast when off */
       outline: none;
       cursor: pointer;
     }
@@ -54,6 +54,7 @@ export class FtToggleElement extends LitElement {
 
     .switch.checked {
       background-color: var(--color-info, #4DA3FF);
+      border-color: transparent;
     }
 
     .knob {
@@ -87,7 +88,6 @@ export class FtToggleElement extends LitElement {
           aria-checked="${this.checked}"
           aria-label="${this.label}"
           class="switch ${this.checked ? 'checked' : ''}"
-          @keydown="${this.handleKeyDown}"
         >
           <span class="knob" aria-hidden="true"></span>
         </button>
@@ -106,12 +106,6 @@ export class FtToggleElement extends LitElement {
     );
   }
 
-  private handleKeyDown(e: KeyboardEvent) {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      this.toggle();
-    }
-  }
 }
 
 declare global {

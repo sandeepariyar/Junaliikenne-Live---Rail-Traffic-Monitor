@@ -1,3 +1,4 @@
+import { useModalA11y } from '../hooks/useModalA11y';
 import React from 'react';
 import { X, Train as TrainIcon, Clock, Users, Gauge, ArrowRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Train, Language } from '../types';
@@ -17,10 +18,14 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
   onHoldConnection,
   language,
 }) => {
+  const dialogRef = useModalA11y<HTMLDivElement>(!!train, onClose);
+
   if (!train) return null;
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={`Junan ${train.number} tiedot`}
@@ -34,7 +39,7 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
         {/* Header */}
         <div className="p-4 border-b border-[#243444] bg-[#111822] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-[8px] bg-[#1C2836] border border-[#243444] flex items-center justify-center text-[#4DA3FF]">
+            <div className="w-9 h-9 rounded-[8px] bg-[#1C2836] border border-[#243444] flex items-center justify-center text-[#80BDFF]">
               <TrainIcon size={18} />
             </div>
             <div>
@@ -55,9 +60,10 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
+            aria-label={language === 'fi' ? 'Sulje' : 'Close'}
             className="p-1 rounded-[6px] hover:bg-[#1C2836] text-[#9BA9B8] hover:text-[#F2F5F7] transition-colors focus-visible:ring-2 focus-visible:ring-[#4DA3FF]"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 

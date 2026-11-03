@@ -70,11 +70,13 @@ export class FtSegmentedControlElement extends LitElement {
     return html`
       <div class="container" role="radiogroup" aria-label="Valitse karttanäkymä">
         ${this.options.map(
-          (opt) => html`
+          (opt, i) => html`
             <button
               type="button"
               role="radio"
               aria-checked="${opt.value === this.selectedValue}"
+              tabindex="${opt.value === this.selectedValue ? '0' : '-1'}"
+              @keydown="${(e: KeyboardEvent) => this.onKey(e, i)}"
               class="${opt.value === this.selectedValue ? 'selected' : ''}"
               @click="${() => this.select(opt.value)}"
             >
@@ -84,6 +86,17 @@ export class FtSegmentedControlElement extends LitElement {
         )}
       </div>
     `;
+  }
+
+  private onKey(e: KeyboardEvent, i: number) {
+    const n = this.options.length;
+    let next = -1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % n;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + n) % n;
+    if (next < 0) return;
+    e.preventDefault();
+    this.select(this.options[next].value);
+    this.updateComplete.then(() => this.shadowRoot?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus());
   }
 
   private select(val: string) {

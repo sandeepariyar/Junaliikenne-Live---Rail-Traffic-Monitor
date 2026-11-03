@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 export interface LitTabItem {
@@ -11,6 +11,8 @@ export interface LitTabItem {
  * <ft-tabs>
  * Standards-compliant Lit Web Component for control-room tabs
  * Full keyboard navigation: Left/Right arrows, Home, End, visible focus ring.
+ * The active panel content is slotted into an internal role="tabpanel" so that
+ * aria-controls / aria-labelledby resolve inside the same shadow root.
  */
 @customElement('ft-tabs')
 export class FtTabsElement extends LitElement {
@@ -75,6 +77,11 @@ export class FtTabsElement extends LitElement {
       box-shadow: 0 -1px 8px rgba(77, 163, 255, 0.6);
     }
 
+    .panel:focus-visible {
+      outline: 2px solid var(--color-info, #4DA3FF);
+      outline-offset: 2px;
+    }
+
     .badge {
       font-size: 10px;
       font-weight: 700;
@@ -87,7 +94,7 @@ export class FtTabsElement extends LitElement {
 
     .tab-btn.active .badge {
       background: rgba(77, 163, 255, 0.2);
-      color: #4DA3FF;
+      color: #80BDFF;
     }
   `;
 
@@ -101,7 +108,7 @@ export class FtTabsElement extends LitElement {
               type="button"
               role="tab"
               id="tab-${tab.id}"
-              aria-controls="panel-${tab.id}"
+              aria-controls="${isActive ? `panel-${tab.id}` : nothing}"
               aria-selected="${isActive}"
               tabindex="${isActive ? '0' : '-1'}"
               class="tab-btn ${isActive ? 'active' : ''}"
@@ -116,6 +123,15 @@ export class FtTabsElement extends LitElement {
             </button>
           `;
         })}
+      </div>
+      <div
+        role="tabpanel"
+        id="panel-${this.activeTabId}"
+        aria-labelledby="tab-${this.activeTabId}"
+        tabindex="0"
+        class="panel"
+      >
+        <slot></slot>
       </div>
     `;
   }

@@ -42,8 +42,8 @@ export const FtStatusBadge: React.FC<FtStatusBadgeProps> = ({
   const variantStyles = {
     ok: 'bg-[#3FB950]/15 text-[#3FB950] border-[#3FB950]/30',
     warning: 'bg-[#F0A030]/15 text-[#F0A030] border-[#F0A030]/40',
-    danger: 'bg-[#F25555]/15 text-[#F25555] border-[#F25555]/40',
-    info: 'bg-[#4DA3FF]/15 text-[#4DA3FF] border-[#4DA3FF]/40',
+    danger: 'bg-[#F25555]/15 text-[#FF8080] border-[#F25555]/40',
+    info: 'bg-[#4DA3FF]/15 text-[#80BDFF] border-[#4DA3FF]/40',
   }[computedVariant];
 
   const sizeStyles = {

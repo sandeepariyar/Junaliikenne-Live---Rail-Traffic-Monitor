@@ -250,7 +250,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
                   >
                     <td className="py-2.5 px-3 font-medium text-[#F2F5F7]">
                       <div className="flex items-center gap-1.5">
-                        <Building2 size={13} className="text-[#4DA3FF]" />
+                        <Building2 size={13} className="text-[#80BDFF]" />
                         <span>{st.name}</span>
                         {st.isDelayHub && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-[#F0A030]/20 text-[#F0A030]">
@@ -269,7 +269,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
                       <span
                         className={`font-mono text-xs font-bold px-2 py-0.5 rounded-[4px] ${
                           st.delayIndex > 50
-                            ? 'bg-[#F25555]/15 text-[#F25555]'
+                            ? 'bg-[#F25555]/15 text-[#FF8080]'
                             : st.delayIndex > 20
                             ? 'bg-[#F0A030]/15 text-[#F0A030]'
                             : 'bg-[#3FB950]/15 text-[#3FB950]'
@@ -301,7 +301,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[#F2F5F7] flex items-center gap-1.5">
-                  <ShieldAlert size={14} className={dist.severity === 'high' ? 'text-[#F25555]' : 'text-[#F0A030]'} />
+                  <ShieldAlert size={14} className={dist.severity === 'high' ? 'text-[#FF8080]' : 'text-[#F0A030]'} />
                   <span>{dist.section}</span>
                 </span>
                 <span className="text-[11px] font-mono text-[#9BA9B8]">
@@ -313,7 +313,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
               </p>
               <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#243444]/60 font-mono">
                 <span className="text-[#F0A030]">Arvioitu viive: +{dist.impactMinutes} min</span>
-                <span className="text-[#4DA3FF] uppercase">{dist.status}</span>
+                <span className="text-[#80BDFF] uppercase">{dist.status}</span>
               </div>
             </div>
           ))}

@@ -68,7 +68,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     <header className="h-14 bg-[#16202A] border-b border-[#243444] px-4 flex items-center justify-between gap-3 select-none shrink-0 z-30">
       {/* 1. Left Zone: Train icon + Title + green "Live" dot + Data Source Toggle */}
       <div className="flex items-center gap-3 shrink-0">
-        <div className="w-8 h-8 rounded-[8px] bg-[#1C2836] border border-[#243444] flex items-center justify-center text-[#4DA3FF]">
+        <div className="w-8 h-8 rounded-[8px] bg-[#1C2836] border border-[#243444] flex items-center justify-center text-[#80BDFF]">
           <Train size={18} strokeWidth={2.2} aria-hidden="true" />
         </div>
         <div className="flex items-baseline gap-2">
@@ -122,10 +122,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           type="button"
           onClick={onOpenSearch}
           className="w-full flex items-center justify-between px-3 py-1.5 rounded-[8px] bg-[#0E141B] border border-[#243444] hover:border-[#4DA3FF]/70 text-[#9BA9B8] hover:text-[#F2F5F7] transition-all text-xs group cursor-pointer focus-visible:ring-2 focus-visible:ring-[#4DA3FF]"
-          aria-label={t.searchPlaceholder}
+          aria-keyshortcuts="Control+K"
         >
           <div className="flex items-center gap-2 truncate">
-            <Search size={14} className="text-[#9BA9B8] group-hover:text-[#4DA3FF]" aria-hidden="true" />
+            <Search size={14} className="text-[#9BA9B8] group-hover:text-[#80BDFF]" aria-hidden="true" />
             <span className="truncate">{t.searchPlaceholder}</span>
           </div>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-[4px] bg-[#16202A] border border-[#243444] text-[10px] font-mono text-[#9BA9B8]">
@@ -145,7 +145,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             {
               value: '3D',
               label: t.threeD,
-              icon: <Layers size={13} className="text-[#4DA3FF]" />,
+              icon: <Layers size={13} className="text-[#80BDFF]" />,
             },
           ]}
           ariaLabel="Valitse karttanäkymä"
@@ -179,6 +179,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           onClick={() => onLanguageChange(language === 'fi' ? 'en' : 'fi')}
           className="flex items-center gap-1.5 px-2 py-1 rounded-[6px] text-xs font-mono font-medium text-[#9BA9B8] hover:text-[#F2F5F7] hover:bg-[#1C2836] border border-transparent hover:border-[#243444] transition-colors focus-visible:ring-2 focus-visible:ring-[#4DA3FF]"
           title="Vaihda kieltä / Switch language"
+          aria-label={language === 'fi' ? 'Kieli: FI. Switch to English' : 'Language: EN. Vaihda suomeksi'}
         >
           <Globe size={13} aria-hidden="true" />
           <span className="font-semibold text-[#F2F5F7]">
@@ -190,7 +191,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Lead Operator Badge: Sandeep Pariyar */}
         <div className="hidden lg:flex items-center gap-2 px-2 py-1 rounded-[6px] bg-[#111822] border border-[#243444] text-xs">
-          <div className="w-5 h-5 rounded-full bg-[#4DA3FF]/20 border border-[#4DA3FF]/40 flex items-center justify-center text-[10px] font-bold text-[#4DA3FF] font-mono">
+          <div className="w-5 h-5 rounded-full bg-[#4DA3FF]/20 border border-[#4DA3FF]/40 flex items-center justify-center text-[10px] font-bold text-[#80BDFF] font-mono">
             SP
           </div>
           <div className="flex flex-col leading-tight">

@@ -25,11 +25,20 @@ export default function App() {
     };
 
     railStore.addEventListener('state-changed', handleStateChange);
+    // Global Ctrl/⌘+K toggles quick search
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
     // Attempt live Digitraffic API poll
     railStore.fetchLiveDigitrafficData();
 
     return () => {
       railStore.removeEventListener('state-changed', handleStateChange);
+      window.removeEventListener('keydown', onKey);
     };
   }, []);
 
@@ -37,6 +46,11 @@ export default function App() {
   useEffect(() => {
     setInspectTrain((cur) => (cur ? state.trains.find((t) => t.id === cur.id) ?? cur : cur));
   }, [state.trains]);
+
+  // Keep <html lang> in sync with the UI language (WCAG 3.1.1)
+  useEffect(() => {
+    document.documentElement.lang = state.language;
+  }, [state.language]);
 
   const handleSelectTrain = (train: Train) => {
     railStore.setSelectedTrain(train.id);
@@ -58,6 +72,13 @@ export default function App() {
 
   return (
     <div className={`w-screen h-screen bg-[#0E141B] text-[#F2F5F7] flex flex-col overflow-hidden font-sans select-none ${state.reducedMotion ? 'reduce-motion' : ''}`}>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-2 focus:rounded-[6px] focus:bg-[#4DA3FF] focus:text-[#0E141B] focus:font-semibold"
+      >
+        {state.language === 'fi' ? 'Siirry pääsisältöön' : 'Skip to main content'}
+      </a>
+
       {/* 1. Top Bar */}
       <TopBar
         viewMode={state.viewMode}
@@ -84,7 +105,7 @@ export default function App() {
       />
 
       {/* Main Split View: Left (60%) Map | Right (40%) Traffic Status Panel */}
-      <main className="flex-1 flex min-h-0 overflow-hidden">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Area (60%): Finland Rail Network Map */}
         <section
           aria-label="Rataverkkokartta"
@@ -142,13 +163,15 @@ export default function App() {
         <div className="w-[40%] h-full relative">
           <ShiftSummaryCard
             language={state.language}
+            trains={state.trains}
+            disturbances={state.disturbances}
           />
 
           {/* Developer / Design System Storybook Trigger */}
           <button
             type="button"
             onClick={() => setIsStorybookOpen(true)}
-            className="absolute top-2 right-2.5 p-1 rounded-[4px] hover:bg-[#1C2836] text-[#9BA9B8] hover:text-[#4DA3FF] transition-colors text-[10px] font-mono flex items-center gap-1 border border-transparent hover:border-[#243444]"
+            className="absolute top-2 right-2.5 p-1 rounded-[4px] hover:bg-[#1C2836] text-[#9BA9B8] hover:text-[#80BDFF] transition-colors text-[10px] font-mono flex items-center gap-1 border border-transparent hover:border-[#243444]"
             title="Avaa Web Components & Design System -dokumentaatio"
           >
             <Layers size={11} />
@@ -183,17 +206,15 @@ export default function App() {
         onClose={() => setIsStorybookOpen(false)}
       />
 
-      {/* Floating Operator Toast Notification */}
-      {state.toastMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 bg-[#16202A] border border-[#3FB950]/50 text-[#F2F5F7] px-4 py-2.5 rounded-[8px] shadow-2xl flex items-center gap-2.5 text-xs font-medium animate-in fade-in slide-in-from-bottom-2 duration-200"
-        >
-          <CheckCircle2 size={16} className="text-[#3FB950] shrink-0" />
-          <span>{state.toastMessage}</span>
-        </div>
-      )}
+      {/* Operator notifications: live region is always mounted so screen readers announce updates */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50">
+        {state.toastMessage && (
+          <div className="bg-[#16202A] border border-[#3FB950]/50 text-[#F2F5F7] px-4 py-2.5 rounded-[8px] shadow-2xl flex items-center gap-2.5 text-xs font-medium">
+            <CheckCircle2 size={16} className="text-[#3FB950] shrink-0" aria-hidden="true" />
+            <span>{state.toastMessage}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

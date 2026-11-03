@@ -50,36 +50,28 @@ export const FtAlertCard: React.FC<FtAlertCardProps> = ({
     },
     danger: {
       border: isSelected ? 'border-[#F25555]' : 'border-[#243444] hover:border-[#F25555]/60',
-      badgeBg: 'bg-[#F25555]/15 text-[#F25555] border-[#F25555]/30',
-      icon: <X size={16} strokeWidth={2.5} className="text-[#F25555]" aria-hidden="true" />,
-      btn: 'bg-[#F25555]/15 text-[#F25555] hover:bg-[#F25555]/25 border-[#F25555]/40',
-      rankBadge: 'bg-[#F25555]/20 text-[#F25555]',
+      badgeBg: 'bg-[#F25555]/15 text-[#FF8080] border-[#F25555]/30',
+      icon: <X size={16} strokeWidth={2.5} className="text-[#FF8080]" aria-hidden="true" />,
+      btn: 'bg-[#F25555]/15 text-[#FF8080] hover:bg-[#F25555]/25 border-[#F25555]/40',
+      rankBadge: 'bg-[#F25555]/20 text-[#FF8080]',
       highlightBar: 'bg-[#F25555]',
     },
     info: {
       border: isSelected ? 'border-[#4DA3FF]' : 'border-[#243444] hover:border-[#4DA3FF]/60',
-      badgeBg: 'bg-[#4DA3FF]/15 text-[#4DA3FF] border-[#4DA3FF]/30',
-      icon: <TrendingUp size={16} strokeWidth={2.2} className="text-[#4DA3FF]" aria-hidden="true" />,
-      btn: 'bg-[#4DA3FF]/15 text-[#4DA3FF] hover:bg-[#4DA3FF]/25 border-[#4DA3FF]/40',
-      rankBadge: 'bg-[#4DA3FF]/20 text-[#4DA3FF]',
+      badgeBg: 'bg-[#4DA3FF]/15 text-[#80BDFF] border-[#4DA3FF]/30',
+      icon: <TrendingUp size={16} strokeWidth={2.2} className="text-[#80BDFF]" aria-hidden="true" />,
+      btn: 'bg-[#4DA3FF]/15 text-[#80BDFF] hover:bg-[#4DA3FF]/25 border-[#4DA3FF]/40',
+      rankBadge: 'bg-[#4DA3FF]/20 text-[#80BDFF]',
       highlightBar: 'bg-[#4DA3FF]',
     },
   }[variant];
 
   return (
-    <div
+    <article
       data-component="ft-alert-card"
       data-variant={variant}
-      tabIndex={0}
-      role="button"
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick?.();
-        }
-      }}
-      className={`group relative flex flex-col justify-between p-3.5 rounded-[8px] bg-[#16202A] border transition-all duration-150 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4DA3FF] shadow-sm ${variantConfig.border} ${isSelected ? 'ring-1 ring-[#4DA3FF]/50 bg-[#1C2836]' : ''} ${className}`}
+      aria-current={isSelected ? 'true' : undefined}
+      className={`group relative flex flex-col justify-between p-3.5 rounded-[8px] bg-[#16202A] border transition-all duration-150 cursor-pointer text-left focus-within:ring-2 focus-within:ring-[#4DA3FF] shadow-sm ${variantConfig.border} ${isSelected ? 'ring-1 ring-[#4DA3FF]/50 bg-[#1C2836]' : ''} ${className}`}
     >
       {/* Top Header: Rank & Icon & Title */}
       <div>
@@ -87,7 +79,7 @@ export const FtAlertCard: React.FC<FtAlertCardProps> = ({
           <div className="flex items-center gap-2">
             <span
               className={`w-5 h-5 rounded-[4px] flex items-center justify-center text-[11px] font-bold font-mono ${variantConfig.rankBadge}`}
-              title={`Prioriteetti #${rank}`}
+              aria-label={`Prioriteetti ${rank}`}
             >
               #{rank}
             </span>
@@ -95,7 +87,14 @@ export const FtAlertCard: React.FC<FtAlertCardProps> = ({
               {variantConfig.icon}
             </div>
             <h3 className="text-sm font-semibold text-[#F2F5F7] tracking-tight truncate">
-              {title}
+              {/* Stretched button: whole card is clickable, without nesting interactive controls */}
+              <button
+                type="button"
+                onClick={onClick}
+                className="text-left focus-visible:outline-none after:absolute after:inset-0 after:content-['']"
+              >
+                {title}
+              </button>
             </h3>
           </div>
         </div>
@@ -108,7 +107,7 @@ export const FtAlertCard: React.FC<FtAlertCardProps> = ({
 
       {/* Suggested Action Button (if present) */}
       {suggestedAction && (
-        <div className="pt-2 border-t border-[#243444]/60 flex items-center justify-between gap-2">
+        <div className="relative z-10 pt-2 border-t border-[#243444]/60 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={(e) => {
@@ -135,6 +134,6 @@ export const FtAlertCard: React.FC<FtAlertCardProps> = ({
           </button>
         </div>
       )}
-    </div>
+    </article>
   );
 };

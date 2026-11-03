@@ -255,7 +255,7 @@ export const RailMap2D: React.FC<Props> = ({
               data-hit
               role="button"
               tabIndex={0}
-              aria-label={`${t.number} ${t.route}, ${cancelled ? (language === 'fi' ? 'peruttu' : 'cancelled') : t.delayMinutes > 0 ? `+${t.delayMinutes} min` : language === 'fi' ? 'ajallaan' : 'on time'}`}
+              aria-label={`${t.number}${t.delayMinutes > 0 && !cancelled ? ` +${t.delayMinutes}` : ''} ${t.route}, ${cancelled ? (language === 'fi' ? 'peruttu' : 'cancelled') : t.delayMinutes > 0 ? `+${t.delayMinutes} min` : language === 'fi' ? 'ajallaan' : 'on time'}`}
               aria-pressed={sel}
               className="cursor-pointer ft-map-target"
               onClick={() => onSelectTrain(t)}
@@ -301,7 +301,7 @@ export const RailMap2D: React.FC<Props> = ({
         >
           <div className="flex justify-between font-mono font-bold text-[#F2F5F7]">
             <span>{hover.number}</span>
-            <span className={hover.status === 'cancelled' ? 'text-[#F25555]' : hover.delayMinutes > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}>
+            <span className={hover.status === 'cancelled' ? 'text-[#FF8080]' : hover.delayMinutes > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}>
               {hover.status === 'cancelled' ? (language === 'fi' ? 'Peruttu' : 'Cancelled') : hover.delayMinutes > 0 ? `+${hover.delayMinutes} min` : language === 'fi' ? 'Ajallaan' : 'On time'}
             </span>
           </div>

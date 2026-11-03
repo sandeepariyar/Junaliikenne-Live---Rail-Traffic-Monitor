@@ -27,7 +27,7 @@ export const FtButton: React.FC<FtButtonProps> = ({
     primary: 'bg-[#4DA3FF] text-[#0E141B] font-semibold hover:bg-[#66b1ff] active:bg-[#3d91eb]',
     secondary: 'bg-[#1C2836] text-[#F2F5F7] border border-[#243444] hover:bg-[#223242] hover:border-[#354a5e]',
     subtle: 'bg-transparent text-[#9BA9B8] hover:text-[#F2F5F7] hover:bg-[#16202A] border border-transparent',
-    danger: 'bg-[#F25555]/20 text-[#F25555] border border-[#F25555]/40 hover:bg-[#F25555]/30',
+    danger: 'bg-[#F25555]/20 text-[#FF8080] border border-[#F25555]/40 hover:bg-[#F25555]/30',
     ghost: 'bg-transparent text-[#F2F5F7] hover:bg-[#1C2836]',
   }[variant];
 

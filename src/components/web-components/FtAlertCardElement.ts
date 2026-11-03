@@ -102,11 +102,11 @@ export class FtAlertCardElement extends LitElement {
     }
     .variant-danger .rank-badge {
       background: rgba(242, 85, 85, 0.2);
-      color: #F25555;
+      color: #FF8080;
     }
     .variant-info .rank-badge {
       background: rgba(77, 163, 255, 0.2);
-      color: #4DA3FF;
+      color: #80BDFF;
     }
 
     .icon-box {
@@ -123,11 +123,11 @@ export class FtAlertCardElement extends LitElement {
     }
     .variant-danger .icon-box {
       background: rgba(242, 85, 85, 0.15);
-      color: #F25555;
+      color: #FF8080;
     }
     .variant-info .icon-box {
       background: rgba(77, 163, 255, 0.15);
-      color: #4DA3FF;
+      color: #80BDFF;
     }
 
     .title {
@@ -185,7 +185,7 @@ export class FtAlertCardElement extends LitElement {
 
     .variant-danger .action-btn {
       background: rgba(242, 85, 85, 0.15);
-      color: #F25555;
+      color: #FF8080;
       border-color: rgba(242, 85, 85, 0.4);
     }
     .variant-danger .action-btn:hover {
@@ -194,7 +194,7 @@ export class FtAlertCardElement extends LitElement {
 
     .variant-info .action-btn {
       background: rgba(77, 163, 255, 0.15);
-      color: #4DA3FF;
+      color: #80BDFF;
       border-color: rgba(77, 163, 255, 0.4);
     }
     .variant-info .action-btn:hover {
