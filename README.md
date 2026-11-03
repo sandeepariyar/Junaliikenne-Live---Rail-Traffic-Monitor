@@ -68,4 +68,4 @@ npm run test:a11y    # Playwright + axe accessibility tests
 npm run screenshots  # regenerate docs/*.png
 ```
 
-Run `npx playwright install chromium` once before running the tests. The site is deployed to GitHub Pages from the `gh-pages` branch (built `dist/`).
+Run `npx playwright install chromium` once before running the tests. The site is deployed automatically to GitHub Pages by the `Deploy to GitHub Pages` GitHub Actions workflow (`.github/workflows/deploy.yml`) on every push to `main`.
