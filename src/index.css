@@ -65,3 +65,35 @@ body {
   animation: none !important;
   transition: none !important;
 }
+
+/* --- Map --- */
+.ft-map-label {
+  paint-order: stroke;
+  stroke: #0E141B;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  font-family: var(--font-sans);
+}
+.ft-map-target:focus { outline: none; }
+.ft-map-target:focus-visible > circle:nth-child(2) { stroke: #4DA3FF; }
+.ft-map-target:focus-visible { outline: 2px solid #4DA3FF !important; }
+@keyframes ft-ripple {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(5); opacity: 0; }
+}
+.ft-ripple { animation: ft-ripple 3s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .ft-ripple { animation: none; opacity: 0.5; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation: none !important; transition: none !important; }
+.ft-3d-label {
+  font: 600 12px var(--font-sans);
+  color: #F2F5F7;
+  text-shadow: 0 0 3px #0B1118, 0 0 6px #0B1118;
+  margin-top: -16px;
+  white-space: nowrap;
+}
+.ft-3d-label.hub { color: #F0A030; }

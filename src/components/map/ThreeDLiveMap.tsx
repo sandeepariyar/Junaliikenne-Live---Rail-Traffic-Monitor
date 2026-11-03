@@ -1,8 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { Station, TrackLine, Train, Language } from '../../types';
-import { TRANSLATIONS } from '../../data/railData';
-import { Maximize2, Compass, Eye, Crosshair, Sparkles, Snowflake, AlertCircle } from 'lucide-react';
+import { RAIL_NETWORK, ROUTES, MAP_BOUNDS, pointAlong } from '../../geo/network';
+import { buildTerrain, elevation } from './terrain';
+import { TRAIN_COLORS } from './RailMap2D';
 
 export interface ThreeDLiveMapProps {
   stations: Station[];
@@ -16,720 +19,300 @@ export interface ThreeDLiveMapProps {
   language: Language;
 }
 
-/**
- * ThreeDLiveMap: Production-grade 3D "Elävä kartta" (Living Map)
- * - Three.js custom shader with GPU-evaluated faceted normals via:
- *   normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)))
- * - Tampere delay ripple wave shader expanding over Finnish terrain
- * - 3D TripsLayer-style train light trails and volumetric headlights
- * - FMI Snowstorm atmospheric particle system over Oulu / Ostrobothnia
- * - Smooth interactive Orbit camera controls with station / train focusing
- */
-export const ThreeDLiveMap: React.FC<ThreeDLiveMapProps> = ({
-  stations,
-  trains,
-  selectedTrainId,
-  onSelectTrain,
-  selectedStationId,
-  onSelectStation,
-  reducedMotion,
-  language,
-}) => {
-  const t = TRANSLATIONS[language];
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [cameraPreset, setCameraPreset] = useState<'overview' | 'tampere' | 'oulu'>('overview');
-  const [hoveredEntity, setHoveredEntity] = useState<string | null>(null);
+type Preset = 'overview' | 'tampere' | 'oulu';
+const CX = MAP_BOUNDS.minX + MAP_BOUNDS.width / 2;
+const CZ = MAP_BOUNDS.minY + MAP_BOUNDS.height / 2;
+const LIFT = 0.12;
+const world = (x: number, y: number, lift = LIFT) => new THREE.Vector3(x - CX, elevation(x, y) + lift, y - CZ);
 
-  // Store references for runtime updates without recreating Three.js scene
-  const trainMeshesRef = useRef<Map<string, { group: THREE.Group; trail: THREE.Line; trainData: Train }>>(new Map());
-  const cameraTargetRef = useRef<{ pos: THREE.Vector3; lookAt: THREE.Vector3 }>({
-    pos: new THREE.Vector3(0, 75, 80),
-    lookAt: new THREE.Vector3(0, 0, 5),
-  });
+const STATUS_HEX: Record<NonNullable<TrackLine['status']>, number> = { normal: 0x7fa6cc, weather_alert: 0x4da3ff, delay_cascade: 0xf0a030 };
+
+// Faceted terrain: per-fragment flat normal from screen-space derivatives.
+const terrainVert = /* glsl */ `
+  varying vec3 vWorld; varying float vH;
+  void main() {
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vWorld = w.xyz; vH = position.y;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }`;
+const terrainFrag = /* glsl */ `
+  uniform vec3 uSunDir; uniform vec3 uSun; uniform vec3 uSky; uniform vec3 uGround;
+  uniform vec3 uLow; uniform vec3 uHigh; uniform vec3 uFog; uniform float uFogNear; uniform float uFogFar;
+  varying vec3 vWorld; varying float vH;
+  void main() {
+    vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+    if (n.y < 0.0) n = -n;
+    vec3 base = mix(uLow, uHigh, smoothstep(0.0, 4.0, vH));
+    float diff = max(dot(n, normalize(uSunDir)), 0.0);
+    vec3 hemi = mix(uGround, uSky, n.y * 0.5 + 0.5);
+    vec3 col = base * (hemi + uSun * diff);
+    float d = length(cameraPosition - vWorld);
+    col = mix(col, uFog, smoothstep(uFogNear, uFogFar, d));
+    gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
+  }`;
+
+export const ThreeDLiveMap: React.FC<ThreeDLiveMapProps> = ({
+  stations, tracks, trains, selectedTrainId, onSelectTrain, selectedStationId, onSelectStation, reducedMotion, language,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [preset, setPreset] = useState<Preset>('overview');
+  const [webglError, setWebglError] = useState(false);
+  const api = useRef<{ go: (p: Preset) => void; setTrains: (t: Train[]) => void; setReduced: (r: boolean) => void; setSel: (id: string | null) => void } | null>(null);
+  const cb = useRef({ onSelectTrain, onSelectStation, trains, stations });
+  cb.current = { onSelectTrain, onSelectStation, trains, stations };
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Detect software WebGL to balance performance
-    const gl = document.createElement('canvas').getContext('webgl2');
-    let isSoftwareGl = false;
-    if (gl) {
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
-      const gpu = String(gl.getParameter(param));
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-      isSoftwareGl = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
+    const el = containerRef.current; if (!el) return;
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    } catch {
+      setWebglError(true); return;
     }
-
-    // 1. Scene, Camera, Renderer
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0e141b);
-    scene.fog = new THREE.FogExp2(0x0e141b, 0.0075);
-
-    const width = container.clientWidth || 800;
-    const height = container.clientHeight || 600;
-
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.5, 500);
-    camera.position.set(0, 75, 80);
-    camera.lookAt(0, 0, 5);
-
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
-      powerPreference: 'high-performance',
-      alpha: false,
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    const W = () => el.clientWidth || 800, H = () => el.clientHeight || 600;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W(), H());
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    el.appendChild(renderer.domElement);
+    renderer.domElement.setAttribute('aria-hidden', 'true');
 
-    container.appendChild(renderer.domElement);
+    const labels = new CSS2DRenderer();
+    labels.setSize(W(), H());
+    Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none' });
+    labels.domElement.setAttribute('aria-hidden', 'true');
+    el.appendChild(labels.domElement);
 
-    // 2. Lighting Rig
-    const ambientLight = new THREE.AmbientLight(0x354a5e, 1.2);
-    scene.add(ambientLight);
+    const scene = new THREE.Scene();
+    const FOG = new THREE.Color(0x0b1118);
+    scene.background = FOG;
 
-    const sunLight = new THREE.DirectionalLight(0xfff3e0, 2.2);
-    sunLight.position.set(50, 90, 40);
-    scene.add(sunLight);
+    const camera = new THREE.PerspectiveCamera(38, W() / H(), 0.5, 600);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = !reducedMotion;
+    controls.maxPolarAngle = Math.PI * 0.42;
+    controls.minDistance = 12;
+    controls.maxDistance = 180;
+    controls.screenSpacePanning = false;
 
-    const blueRimLight = new THREE.DirectionalLight(0x4da3ff, 1.5);
-    blueRimLight.position.set(-60, 40, -50);
-    scene.add(blueRimLight);
+    const PRESETS: Record<Preset, { pos: THREE.Vector3; target: THREE.Vector3 }> = (() => {
+      const tpe = stations.find((s) => s.id === 'TPE')!, oul = stations.find((s) => s.id === 'OUL')!;
+      const t = world(tpe.x, tpe.y, 0), o = world(oul.x, oul.y, 0);
+      return {
+        overview: { pos: new THREE.Vector3(12, 62, 76), target: new THREE.Vector3(1, 0, 12) },
+        tampere: { pos: t.clone().add(new THREE.Vector3(6, 16, 18)), target: t },
+        oulu: { pos: o.clone().add(new THREE.Vector3(6, 18, 20)), target: o },
+      };
+    })();
+    camera.position.copy(PRESETS.overview.pos);
+    controls.target.copy(PRESETS.overview.target);
+    let fly: { from: THREE.Vector3; to: THREE.Vector3; tf: THREE.Vector3; tt: THREE.Vector3; t: number } | null = null;
 
-    // Coordinate mapping helper:
-    // 2D percentage (0..100 X, 0..100 Y) -> 3D coordinates (X: -40..40, Z: -55..55)
-    // In our SVG map, Y=0 is North (Rovaniemi), Y=100 is South (Gulf of Finland/Helsinki)
-    const mapCoordsTo3D = (px: number, py: number): { x: number; z: number } => {
-      const x = (px - 50) * 0.85; // centered around 0
-      const z = (py - 50) * 1.15; // south is +Z, north is -Z
-      return { x, z };
-    };
+    // Sea plane + faint grid
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x0d1620 }));
+    sea.rotation.x = -Math.PI / 2; sea.position.y = -0.02; scene.add(sea);
+    const grid = new THREE.GridHelper(240, 29, 0x16212c, 0x121b25); grid.position.y = -0.01; scene.add(grid);
 
-    // Calculate elevation based on Finland's terrain topology
-    const getTerrainHeight = (worldX: number, worldZ: number): number => {
-      // Distance from center of Finland
-      const normX = worldX / 40;
-      const normZ = worldZ / 55;
+    // Terrain
+    const tm = buildTerrain(1.25);
+    const tgeo = new THREE.BufferGeometry();
+    const pos = tm.positions.slice();
+    for (let i = 0; i < pos.length; i += 3) { pos[i] -= CX; pos[i + 2] -= CZ; }
+    tgeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    tgeo.setIndex(new THREE.BufferAttribute(tm.index, 1));
+    const tmat = new THREE.ShaderMaterial({
+      vertexShader: terrainVert, fragmentShader: terrainFrag, side: THREE.DoubleSide,
+      uniforms: {
+        uSunDir: { value: new THREE.Vector3(-0.75, 0.35, 0.55) },
+        uSun: { value: new THREE.Color(0xffb27a).multiplyScalar(1.7) },
+        uSky: { value: new THREE.Color(0x34506e) },
+        uGround: { value: new THREE.Color(0x0e1620) },
+        uLow: { value: new THREE.Color(0x33495e) },
+        uHigh: { value: new THREE.Color(0x8195a8) },
+        uFog: { value: FOG }, uFogNear: { value: 90 }, uFogFar: { value: 220 },
+      },
+    });
+    scene.add(new THREE.Mesh(tgeo, tmat));
 
-      // Check if inside Finland roughly
-      const finDist = Math.sqrt(normX * normX * 1.4 + normZ * normZ);
-      if (finDist > 1.05) return 0.0; // Sea (Baltic / Gulf of Bothnia)
+    // Full rail network (thin, dim)
+    const segs: number[] = [];
+    RAIL_NETWORK.forEach((l) => { for (let i = 1; i < l.length; i++) { const a = world(l[i - 1][0], l[i - 1][1], 0.06), b = world(l[i][0], l[i][1], 0.06); segs.push(a.x, a.y, a.z, b.x, b.y, b.z); } });
+    const netGeo = new THREE.BufferGeometry(); netGeo.setAttribute('position', new THREE.Float32BufferAttribute(segs, 3));
+    scene.add(new THREE.LineSegments(netGeo, new THREE.LineBasicMaterial({ color: 0x5f7c98, transparent: true, opacity: 0.55 })));
 
-      // Salpausselkä ridge in the south-east
-      const salpausselka = Math.exp(-Math.pow((normX - 0.2) * 3 + (normZ - 0.5) * 3, 2)) * 3.5;
-      // Lake plateau ripples
-      const lakes = Math.sin(worldX * 0.3) * Math.cos(worldZ * 0.25) * 1.8;
-      // Northern Lapland fells (elevations rise towards north, normZ < -0.3)
-      const lapland = Math.max(0, -normZ - 0.2) * 12.0 + Math.sin(worldX * 0.5) * 2.0;
-
-      const rawHeight = Math.max(0, 1.2 + salpausselka + lakes + lapland);
-      return rawHeight;
-    };
-
-    // 3. Faceted Terrain Shader (User's formula: normalize(cross(dFdx(vWorldPos), dFdy(vWorldPos))))
-    const terrainGeo = new THREE.PlaneGeometry(90, 130, 80, 110);
-    terrainGeo.rotateX(-Math.PI / 2);
-
-    // Apply elevation displacement directly into vertices
-    const posAttr = terrainGeo.attributes.position;
-    for (let i = 0; i < posAttr.count; i++) {
-      const vx = posAttr.getX(i);
-      const vz = posAttr.getZ(i);
-      const h = getTerrainHeight(vx, vz);
-      posAttr.setY(i, h);
-    }
-    terrainGeo.computeVertexNormals();
-
-    const tampere3D = mapCoordsTo3D(41, 74);
-
-    const terrainUniforms = {
-      uTime: { value: 0 },
-      uTamperePos: { value: new THREE.Vector2(tampere3D.x, tampere3D.z) },
-      uLightPos: { value: new THREE.Vector3(50, 90, 40) },
-      uSeaColor: { value: new THREE.Color(0x0a1016) },
-      uLowlandColor: { value: new THREE.Color(0x141f2a) },
-      uHighlandColor: { value: new THREE.Color(0x223546) },
-      uSnowColor: { value: new THREE.Color(0x4a6b8a) },
-      uRippleColor: { value: new THREE.Color(0xf0a030) },
-    };
-
-    const terrainShaderMat = new THREE.ShaderMaterial({
-      uniforms: terrainUniforms,
-      vertexShader: `
-        varying vec3 vWorldPosition;
-        varying vec2 vUv;
-        varying float vHeight;
-
-        void main() {
-          vUv = uv;
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vWorldPosition = worldPos.xyz;
-          vHeight = position.y;
-          gl_Position = projectionMatrix * viewMatrix * worldPos;
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform vec2 uTamperePos;
-        uniform vec3 uLightPos;
-        uniform vec3 uSeaColor;
-        uniform vec3 uLowlandColor;
-        uniform vec3 uHighlandColor;
-        uniform vec3 uSnowColor;
-        uniform vec3 uRippleColor;
-
-        varying vec3 vWorldPosition;
-        varying vec2 vUv;
-        varying float vHeight;
-
-        void main() {
-          // USER'S EXACT NORMAL FORMULA FOR FACETED / LOW-POLY SHADING:
-          vec3 fdx = dFdx(vWorldPosition);
-          vec3 fdy = dFdy(vWorldPosition);
-          vec3 normal = normalize(cross(fdx, fdy));
-
-          // Directional Light Lambert Shading
-          vec3 lightDir = normalize(uLightPos - vWorldPosition);
-          float diff = max(dot(normal, lightDir), 0.0);
-
-          // Subtle cool ambient sky bounce
-          vec3 skyDir = vec3(0.0, 1.0, 0.0);
-          float skyDiff = max(dot(normal, skyDir), 0.0) * 0.35;
-
-          // Base elevation palette
-          vec3 baseColor = uLowlandColor;
-          if (vHeight < 0.2) {
-            baseColor = uSeaColor; // Baltic Sea / Coastline
-          } else if (vHeight < 6.0) {
-            baseColor = mix(uLowlandColor, uHighlandColor, vHeight / 6.0);
-          } else {
-            baseColor = mix(uHighlandColor, uSnowColor, clamp((vHeight - 6.0) / 8.0, 0.0, 1.0));
-          }
-
-          vec3 shadedColor = baseColor * (diff * 0.75 + skyDiff + 0.25);
-
-          // Faceted polygon edge highlight (gives crisp low-poly definition)
-          float edgeGlow = (1.0 - abs(dot(normal, vec3(0.0, 1.0, 0.0)))) * 0.12;
-          shadedColor += vec3(edgeGlow * 0.3, edgeGlow * 0.5, edgeGlow * 0.7);
-
-          // Tampere Delay Ripple concentric wave expansion
-          float distToTampere = length(vWorldPosition.xz - uTamperePos);
-          if (distToTampere < 42.0) {
-            float wave = sin(distToTampere * 0.45 - uTime * 3.5);
-            float ripple = smoothstep(0.75, 0.99, wave) * exp(-distToTampere * 0.075);
-            shadedColor += uRippleColor * ripple * 1.8;
-          }
-
-          gl_FragColor = vec4(shadedColor, 1.0);
-        }
-      `,
+    // Scenario routes: glowing tubes
+    const disposables: { dispose: () => void }[] = [tgeo, tmat, netGeo];
+    tracks.forEach((tr) => {
+      const p = ROUTES[tr.id]; if (!p) return;
+      const curve = new THREE.CatmullRomCurve3(p.map(([x, y]) => world(x, y)), false, 'centripetal', 0.2);
+      const color = STATUS_HEX[tr.status ?? 'normal'];
+      const segsN = Math.max(16, p.length * 4);
+      const core = new THREE.TubeGeometry(curve, segsN, tr.isDoubleTrack ? 0.11 : 0.08, 5, false);
+      const glow = new THREE.TubeGeometry(curve, segsN, 0.32, 6, false);
+      const coreMat = new THREE.MeshBasicMaterial({ color });
+      const glowMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: tr.status === 'normal' ? 0.08 : 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
+      scene.add(new THREE.Mesh(core, coreMat), new THREE.Mesh(glow, glowMat));
+      disposables.push(core, glow, coreMat, glowMat);
     });
 
-    const terrainMesh = new THREE.Mesh(terrainGeo, terrainShaderMat);
-    scene.add(terrainMesh);
-
-    // 4. Elevated Railway Tracks (Glowing extruded curves connecting Finland stations)
-    const trackSplines: { id: string; points: THREE.Vector3[]; isDelayCascade: boolean }[] = [];
-
-    // Connect stations according to Finnish railway trunk lines
-    const connectLines: { from: string; to: string; isCascade?: boolean }[] = [
-      { from: 'HKI', to: 'RI' },
-      { from: 'RI', to: 'TPE', isCascade: true },
-      { from: 'TPE', to: 'SK', isCascade: true },
-      { from: 'SK', to: 'OUL' },
-      { from: 'OUL', to: 'KEM' },
-      { from: 'KEM', to: 'ROI' },
-      { from: 'HKI', to: 'TKU', isCascade: true },
-      { from: 'TKU', to: 'TPE' },
-      { from: 'TPE', to: 'JYV', isCascade: true },
-      { from: 'JYV', to: 'KUO' },
-      { from: 'KUO', to: 'OUL' },
-      { from: 'RI', to: 'LH' },
-      { from: 'LH', to: 'KV' },
-      { from: 'KV', to: 'KUO' },
-    ];
-
-    const tracksGroup = new THREE.Group();
-    scene.add(tracksGroup);
-
-    connectLines.forEach((conn) => {
-      const stFrom = stations.find((s) => s.id === conn.from);
-      const stTo = stations.find((s) => s.id === conn.to);
-      if (!stFrom || !stTo) return;
-
-      const p1 = mapCoordsTo3D(stFrom.x, stFrom.y);
-      const p2 = mapCoordsTo3D(stTo.x, stTo.y);
-
-      // Height grounded above terrain
-      const h1 = getTerrainHeight(p1.x, p1.z) + 0.6;
-      const h2 = getTerrainHeight(p2.x, p2.z) + 0.6;
-
-      const midX = (p1.x + p2.x) * 0.5;
-      const midZ = (p1.z + p2.z) * 0.5;
-      const midH = getTerrainHeight(midX, midZ) + 0.8;
-
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(p1.x, h1, p1.z),
-        new THREE.Vector3(midX, midH, midZ),
-        new THREE.Vector3(p2.x, h2, p2.z),
-      ]);
-
-      const trackTubeGeo = new THREE.TubeGeometry(curve, 32, 0.28, 8, false);
-      const isCascade = conn.isCascade || false;
-
-      const trackMat = new THREE.MeshStandardMaterial({
-        color: isCascade ? 0xf0a030 : 0x354a5e,
-        emissive: isCascade ? 0x905010 : 0x16202a,
-        roughness: 0.3,
-        metalness: 0.8,
-      });
-
-      const trackMesh = new THREE.Mesh(trackTubeGeo, trackMat);
-      tracksGroup.add(trackMesh);
-
-      trackSplines.push({
-        id: `${conn.from}-${conn.to}`,
-        points: curve.getPoints(24),
-        isDelayCascade: isCascade,
-      });
+    // Stations
+    const pickables: THREE.Object3D[] = [];
+    const stMat = new THREE.MeshBasicMaterial({ color: 0xf2f5f7 });
+    const hubMat = new THREE.MeshBasicMaterial({ color: 0xf0a030 });
+    const stGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.5, 16);
+    disposables.push(stMat, hubMat, stGeo);
+    stations.forEach((s) => {
+      const m = new THREE.Mesh(stGeo, s.isDelayHub ? hubMat : stMat);
+      m.position.copy(world(s.x, s.y, 0.25)); m.userData = { station: s.id }; scene.add(m); pickables.push(m);
+      const div = document.createElement('div');
+      div.className = 'ft-3d-label' + (s.isDelayHub ? ' hub' : '');
+      div.textContent = s.name;
+      const lab = new CSS2DObject(div); lab.position.copy(world(s.x, s.y, 0.9)); scene.add(lab);
     });
 
-    // 5. Station Towers & Light Beacons
-    const stationsGroup = new THREE.Group();
-    scene.add(stationsGroup);
-
-    stations.forEach((st) => {
-      const p = mapCoordsTo3D(st.x, st.y);
-      const h = getTerrainHeight(p.x, p.z);
-      const isTampere = st.id === 'TPE';
-      const isOulu = st.id === 'OUL';
-
-      const stGroup = new THREE.Group();
-      stGroup.position.set(p.x, h, p.z);
-
-      // Base cylinder
-      const baseGeo = new THREE.CylinderGeometry(1.6, 2.0, 0.5, 16);
-      const baseMat = new THREE.MeshStandardMaterial({
-        color: isTampere ? 0xf0a030 : 0x1c2836,
-        roughness: 0.4,
-        metalness: 0.7,
-      });
-      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-      baseMesh.position.y = 0.25;
-      stGroup.add(baseMesh);
-
-      // Station beacon light beam
-      const beamGeo = new THREE.CylinderGeometry(0.1, 0.4, 7, 8, 1, true);
-      beamGeo.translate(0, 3.5, 0);
-      const beamMat = new THREE.MeshBasicMaterial({
-        color: isTampere ? 0xf0a030 : isOulu ? 0x4da3ff : 0x3fb950,
-        transparent: true,
-        opacity: isTampere ? 0.7 : 0.4,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-      });
-      const beamMesh = new THREE.Mesh(beamGeo, beamMat);
-      stGroup.add(beamMesh);
-
-      // Station Beacon Orb
-      const orbGeo = new THREE.SphereGeometry(0.5, 12, 12);
-      const orbMat = new THREE.MeshBasicMaterial({
-        color: isTampere ? 0xffb74d : 0xffffff,
-      });
-      const orbMesh = new THREE.Mesh(orbGeo, orbMat);
-      orbMesh.position.y = 7;
-      stGroup.add(orbMesh);
-
-      // Floating Canvas Text Billboard for Station Name
-      const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'rgba(22, 32, 42, 0.9)';
-        ctx.roundRect(4, 4, 248, 56, 8);
-        ctx.fill();
-        ctx.strokeStyle = isTampere ? '#F0A030' : '#4DA3FF';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        ctx.font = 'bold 26px Inter, sans-serif';
-        ctx.fillStyle = '#F2F5F7';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(st.name, 128, 32);
+    // Ripple at delay hub
+    const hub = stations.find((s) => s.isDelayHub);
+    const ripples: THREE.Mesh[] = [];
+    if (hub) {
+      const rg = new THREE.RingGeometry(0.92, 1, 64); rg.rotateX(-Math.PI / 2); disposables.push(rg);
+      for (let i = 0; i < 3; i++) {
+        const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xf0a030, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+        m.position.copy(world(hub.x, hub.y, 0.2)); m.userData.phase = i / 3; scene.add(m); ripples.push(m);
       }
-
-      const textTex = new THREE.CanvasTexture(canvas);
-      textTex.colorSpace = THREE.SRGBColorSpace;
-      const spriteMat = new THREE.SpriteMaterial({ map: textTex, transparent: true });
-      const sprite = new THREE.Sprite(spriteMat);
-      sprite.position.set(0, 9.2, 0);
-      sprite.scale.set(6, 1.5, 1);
-      stGroup.add(sprite);
-
-      stationsGroup.add(stGroup);
-    });
-
-    // 6. Moving 3D Trains with TripsLayer-style Glowing Light Trails
-    const trainsGroup = new THREE.Group();
-    scene.add(trainsGroup);
-
-    trains.forEach((train) => {
-      const p = mapCoordsTo3D(train.x, train.y);
-      const h = getTerrainHeight(p.x, p.z) + 0.9;
-
-      const trainGroup = new THREE.Group();
-      trainGroup.position.set(p.x, h, p.z);
-
-      // Determine train color
-      let trainColor = 0x3fb950; // IC Green
-      if (train.type === 'S') trainColor = 0x4da3ff; // Pendolino Blue
-      if (train.type === 'HDM') trainColor = 0xa371f7;
-      if (train.type === 'T') trainColor = 0xf0a030;
-      if (train.status === 'cancelled') trainColor = 0xf25555;
-      else if (train.delayMinutes > 0) trainColor = 0xf0a030;
-
-      // Locomotive body (procedural 3-part train mesh)
-      const locoGeo = new THREE.BoxGeometry(1.2, 1.0, 3.6);
-      const locoMat = new THREE.MeshStandardMaterial({
-        color: trainColor,
-        roughness: 0.25,
-        metalness: 0.6,
-      });
-      const locoMesh = new THREE.Mesh(locoGeo, locoMat);
-      locoMesh.position.y = 0.5;
-      trainGroup.add(locoMesh);
-
-      // Cab windshield
-      const cabGeo = new THREE.BoxGeometry(1.0, 0.5, 0.8);
-      const cabMat = new THREE.MeshBasicMaterial({ color: 0x111822 });
-      const cabMesh = new THREE.Mesh(cabGeo, cabMat);
-      cabMesh.position.set(0, 0.75, -1.4);
-      trainGroup.add(cabMesh);
-
-      // Headlight Beams (volumetric light cone)
-      if (train.status !== 'cancelled') {
-        const coneGeo = new THREE.ConeGeometry(1.2, 5.0, 8, 1, true);
-        coneGeo.rotateX(Math.PI / 2);
-        coneGeo.translate(0, 0.5, -4.0);
-        const coneMat = new THREE.MeshBasicMaterial({
-          color: 0xffffff,
-          transparent: true,
-          opacity: 0.35,
-          blending: THREE.AdditiveBlending,
-          side: THREE.DoubleSide,
-        });
-        const headlightCone = new THREE.Mesh(coneGeo, coneMat);
-        trainGroup.add(headlightCone);
-      }
-
-      // Billboard label for Train Number
-      const tCanvas = document.createElement('canvas');
-      tCanvas.width = 160;
-      tCanvas.height = 48;
-      const tCtx = tCanvas.getContext('2d');
-      if (tCtx) {
-        tCtx.fillStyle = 'rgba(14, 20, 27, 0.95)';
-        tCtx.roundRect(2, 2, 156, 44, 6);
-        tCtx.fill();
-        tCtx.strokeStyle = train.delayMinutes > 0 ? '#F0A030' : '#3FB950';
-        tCtx.lineWidth = 2;
-        tCtx.stroke();
-
-        tCtx.font = 'bold 22px monospace';
-        tCtx.fillStyle = '#FFFFFF';
-        tCtx.textAlign = 'center';
-        tCtx.textBaseline = 'middle';
-        const label = train.delayMinutes > 0 ? `${train.number} +${train.delayMinutes}m` : train.number;
-        tCtx.fillText(label, 80, 24);
-      }
-      const tTex = new THREE.CanvasTexture(tCanvas);
-      tTex.colorSpace = THREE.SRGBColorSpace;
-      const tSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tTex }));
-      tSprite.position.set(0, 3.2, 0);
-      tSprite.scale.set(4.2, 1.3, 1);
-      trainGroup.add(tSprite);
-
-      // Rotated according to train heading
-      trainGroup.rotation.y = THREE.MathUtils.degToRad(train.headingDeg + 180);
-      trainsGroup.add(trainGroup);
-
-      // TripsLayer Light Trail behind train
-      const trailPoints = [
-        new THREE.Vector3(p.x, h, p.z),
-        new THREE.Vector3(p.x, h, p.z + 4),
-        new THREE.Vector3(p.x, h, p.z + 8),
-      ];
-      const trailGeo = new THREE.BufferGeometry().setFromPoints(trailPoints);
-      const trailMat = new THREE.LineBasicMaterial({
-        color: trainColor,
-        transparent: true,
-        opacity: 0.6,
-        linewidth: 2,
-      });
-      const trailLine = new THREE.Line(trailGeo, trailMat);
-      scene.add(trailLine);
-
-      trainMeshesRef.current.set(train.id, {
-        group: trainGroup,
-        trail: trailLine,
-        trainData: train,
-      });
-    });
-
-    // 7. FMI Snow Particle Vortex over Northern Finland (Oulu Corridor)
-    const oulu3D = mapCoordsTo3D(46, 39);
-    const snowCount = 450;
-    const snowGeo = new THREE.BufferGeometry();
-    const snowPositions = new Float32Array(snowCount * 3);
-    const snowVelocities: { x: number; y: number; z: number }[] = [];
-
-    for (let i = 0; i < snowCount; i++) {
-      snowPositions[i * 3] = oulu3D.x + (Math.random() - 0.5) * 35;
-      snowPositions[i * 3 + 1] = 2.0 + Math.random() * 25;
-      snowPositions[i * 3 + 2] = oulu3D.z + (Math.random() - 0.5) * 35;
-
-      snowVelocities.push({
-        x: (Math.random() - 0.5) * 0.15 - 0.08,
-        y: -0.15 - Math.random() * 0.1,
-        z: (Math.random() - 0.5) * 0.15,
-      });
     }
 
-    snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
-    const snowMat = new THREE.PointsMaterial({
-      color: 0xe0f2fe,
-      size: 0.8,
-      transparent: true,
-      opacity: 0.75,
-      blending: THREE.AdditiveBlending,
-    });
-    const snowParticles = new THREE.Points(snowGeo, snowMat);
-    scene.add(snowParticles);
-
-    // 8. Interactive Mouse Orbit Controls (Smooth Pointer Drag)
-    let isDragging = false;
-    let prevMousePos = { x: 0, y: 0 };
-    let cameraAngle = { theta: 0, phi: Math.PI / 4, radius: 110 };
-
-    const onPointerDown = (e: PointerEvent) => {
-      isDragging = true;
-      prevMousePos = { x: e.clientX, y: e.clientY };
+    // Trains
+    const trainGroup = new THREE.Group(); scene.add(trainGroup);
+    const trainGeo = new THREE.SphereGeometry(0.45, 16, 12);
+    const haloGeo = new THREE.SphereGeometry(0.75, 16, 12);
+    disposables.push(trainGeo, haloGeo);
+    let trainObjs: { t: Train; mesh: THREE.Mesh; halo: THREE.Mesh }[] = [];
+    let selId: string | null = selectedTrainId;
+    const setTrains = (list: Train[]) => {
+      trainObjs.forEach((o) => { trainGroup.remove(o.mesh, o.halo); pickables.splice(pickables.indexOf(o.mesh), 1); (o.mesh.material as THREE.Material).dispose(); (o.halo.material as THREE.Material).dispose(); });
+      trainObjs = list.map((t) => {
+        const cancelled = t.status === 'cancelled';
+        const color = cancelled ? 0xf25555 : TRAIN_COLORS[t.type];
+        const mesh = new THREE.Mesh(trainGeo, new THREE.MeshBasicMaterial({ color }));
+        const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: t.delayMinutes > 0 ? 0xf0a030 : color, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+        mesh.userData = { train: t.id };
+        trainGroup.add(mesh, halo); pickables.push(mesh);
+        return { t, mesh, halo };
+      });
+      place(0);
     };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging) {
-        // Simple raycast to hover trains/stations
-        return;
-      }
-      const dx = e.clientX - prevMousePos.x;
-      const dy = e.clientY - prevMousePos.y;
-      prevMousePos = { x: e.clientX, y: e.clientY };
-
-      cameraAngle.theta -= dx * 0.005;
-      cameraAngle.phi = Math.max(0.15, Math.min(Math.PI / 2.2, cameraAngle.phi + dy * 0.005));
-    };
-
-    const onPointerUp = () => {
-      isDragging = false;
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      cameraAngle.radius = Math.max(30, Math.min(180, cameraAngle.radius + e.deltaY * 0.08));
-    };
-
-    container.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    container.addEventListener('wheel', onWheel, { passive: false });
-
-    // 9. Animation & Render Loop
-    let animationFrameId = 0;
-    let clock = new THREE.Clock();
-
-    const animate = () => {
-      const delta = clock.getDelta();
-      const time = clock.getElapsedTime();
-
-      // Update shader uniforms
-      terrainUniforms.uTime.value = time;
-
-      // Update Snow Particles
-      if (!reducedMotion) {
-        const positions = snowGeo.attributes.position.array as Float32Array;
-        for (let i = 0; i < snowCount; i++) {
-          positions[i * 3] += snowVelocities[i].x;
-          positions[i * 3 + 1] += snowVelocities[i].y;
-          positions[i * 3 + 2] += snowVelocities[i].z;
-
-          // Recycle snow flakes that hit ground
-          if (positions[i * 3 + 1] < 1.0) {
-            positions[i * 3] = oulu3D.x + (Math.random() - 0.5) * 35;
-            positions[i * 3 + 1] = 22.0 + Math.random() * 5;
-            positions[i * 3 + 2] = oulu3D.z + (Math.random() - 0.5) * 35;
-          }
+    const place = (elapsed: number) => {
+      trainObjs.forEach(({ t, mesh, halo }) => {
+        let x = t.x, y = t.y;
+        if (t.lineId && t.along !== undefined && t.status !== 'cancelled' && !reducedFlag) {
+          // visual motion: ~ speed-proportional drift along the route, ping-pong within ±8 %
+          const s = (elapsed * (t.speedKmH / 160) * 0.004) % 0.32;
+          const off = s < 0.16 ? s : 0.32 - s;
+          const p = pointAlong(t.lineId, t.along + (t.travelDir ?? 1) * (off - 0.08));
+          x = p.x; y = p.y;
         }
-        snowGeo.attributes.position.needsUpdate = true;
+        const w = world(x, y, 0.45); mesh.position.copy(w); halo.position.copy(w);
+        const sel = t.id === selId; halo.scale.setScalar(sel ? 1.6 : 1);
+        (halo.material as THREE.MeshBasicMaterial).opacity = sel ? 0.5 : 0.25;
+      });
+    };
+    let reducedFlag = reducedMotion;
+    setTrains(trains);
+
+    // Picking
+    const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2();
+    let down = { x: 0, y: 0 };
+    const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY }; };
+    const onUp = (e: PointerEvent) => {
+      if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.intersectObjects(pickables, false)[0]; if (!hit) return;
+      const { train, station } = hit.object.userData;
+      if (train) { const t = cb.current.trains.find((x) => x.id === train); if (t) cb.current.onSelectTrain(t); }
+      if (station) { const s = cb.current.stations.find((x) => x.id === station); if (s) cb.current.onSelectStation(s); }
+    };
+    renderer.domElement.addEventListener('pointerdown', onDown);
+    renderer.domElement.addEventListener('pointerup', onUp);
+
+    const onResize = () => { camera.aspect = W() / H(); camera.updateProjectionMatrix(); renderer.setSize(W(), H()); labels.setSize(W(), H()); render(); };
+    const ro = new ResizeObserver(onResize); ro.observe(el);
+
+    const clock = new THREE.Clock();
+    let raf = 0;
+    const render = () => { renderer.render(scene, camera); labels.render(scene, camera); };
+    const tick = () => {
+      const dt = clock.getDelta(); const el2 = clock.elapsedTime;
+      if (fly) {
+        fly.t = Math.min(1, fly.t + dt / 1.2); const k = 1 - Math.pow(1 - fly.t, 3);
+        camera.position.lerpVectors(fly.from, fly.to, k); controls.target.lerpVectors(fly.tf, fly.tt, k);
+        if (fly.t >= 1) fly = null;
       }
-
-      // Smooth camera interpolation towards target
-      const targetX = cameraTargetRef.current.lookAt.x + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
-      const targetY = cameraTargetRef.current.lookAt.y + cameraAngle.radius * Math.cos(cameraAngle.phi);
-      const targetZ = cameraTargetRef.current.lookAt.z + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
-
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 5, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 5, delta);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 5, delta);
-
-      camera.lookAt(cameraTargetRef.current.lookAt);
-
-      renderer.render(scene, camera);
-      animationFrameId = requestAnimationFrame(animate);
+      controls.update();
+      if (!reducedFlag) {
+        ripples.forEach((m) => { const p = (el2 / 3 + m.userData.phase) % 1; m.scale.setScalar(0.6 + p * 5.5); (m.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - p); });
+        place(el2);
+      } else {
+        ripples.forEach((m, i) => { m.scale.setScalar(1.5 + i * 1.5); (m.material as THREE.MeshBasicMaterial).opacity = 0.35; });
+      }
+      render();
+      raf = requestAnimationFrame(tick);
     };
+    tick();
 
-    animate();
-
-    // 10. Resize Observer
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+    api.current = {
+      go: (p) => {
+        const P = PRESETS[p];
+        if (reducedFlag) { camera.position.copy(P.pos); controls.target.copy(P.target); controls.update(); return; }
+        fly = { from: camera.position.clone(), to: P.pos.clone(), tf: controls.target.clone(), tt: P.target.clone(), t: 0 };
+      },
+      setTrains,
+      setReduced: (r) => { reducedFlag = r; controls.enableDamping = !r; if (r) place(0); },
+      setSel: (id) => { selId = id; },
     };
-
-    window.addEventListener('resize', handleResize);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-      container.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      container.removeEventListener('wheel', onWheel);
-
-      // Clean disposal
-      terrainGeo.dispose();
-      terrainShaderMat.dispose();
-      snowGeo.dispose();
-      snowMat.dispose();
-      renderer.dispose();
-      if (renderer.domElement.parentElement) {
-        renderer.domElement.parentElement.removeChild(renderer.domElement);
-      }
+      cancelAnimationFrame(raf); ro.disconnect(); controls.dispose();
+      renderer.domElement.removeEventListener('pointerdown', onDown);
+      renderer.domElement.removeEventListener('pointerup', onUp);
+      trainObjs.forEach((o) => { (o.mesh.material as THREE.Material).dispose(); (o.halo.material as THREE.Material).dispose(); });
+      ripples.forEach((m) => (m.material as THREE.Material).dispose());
+      disposables.forEach((d) => d.dispose());
+      renderer.dispose(); el.innerHTML = ''; api.current = null;
     };
-  }, [stations, trains, reducedMotion]);
+    // scene is built once; dynamic data flows through api.current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stations, tracks]);
 
-  // Handle Preset Camera Jumps
-  const handlePreset = (preset: 'overview' | 'tampere' | 'oulu') => {
-    setCameraPreset(preset);
-    if (preset === 'overview') {
-      cameraTargetRef.current = {
-        pos: new THREE.Vector3(0, 75, 80),
-        lookAt: new THREE.Vector3(0, 0, 5),
-      };
-    } else if (preset === 'tampere') {
-      // Focus on Tampere hub (-7.65, 27.6)
-      cameraTargetRef.current = {
-        pos: new THREE.Vector3(-7, 30, 48),
-        lookAt: new THREE.Vector3(-7.6, 2.5, 27.6),
-      };
-    } else if (preset === 'oulu') {
-      // Focus on Oulu snowstorm corridor (-3.4, -12.65)
-      cameraTargetRef.current = {
-        pos: new THREE.Vector3(-3.4, 28, 5),
-        lookAt: new THREE.Vector3(-3.4, 4.0, -12.65),
-      };
-    }
-  };
+  useEffect(() => { api.current?.setTrains(trains); }, [trains]);
+  useEffect(() => { api.current?.setReduced(reducedMotion); }, [reducedMotion]);
+  useEffect(() => { api.current?.setSel(selectedTrainId); }, [selectedTrainId]);
+
+  const go = (p: Preset) => { setPreset(p); api.current?.go(p); };
+  const fi = language === 'fi';
+  const presets: [Preset, string][] = [['overview', fi ? 'Koko Suomi' : 'All Finland'], ['tampere', 'Tampere'], ['oulu', 'Oulu']];
+  void selectedStationId;
 
   return (
-    <div className="relative w-full h-full bg-[#0E141B] overflow-hidden select-none">
-      {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-
-      {/* 3D Elävä kartta Overlay Header */}
-      <div className="absolute top-3 left-3 z-20 flex items-center gap-2">
-        <div className="px-3 py-1.5 rounded-[8px] bg-[#16202A]/90 backdrop-blur-md border border-[#243444] shadow-md flex items-center gap-2 text-xs">
-          <Sparkles size={14} className="text-[#4DA3FF]" />
-          <span className="font-bold text-[#F2F5F7]">3D Elävä kartta</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#4DA3FF]/20 text-[#4DA3FF]">
-            GPU Shader &amp; TripsLayer
-          </span>
-        </div>
-
-        {/* Tampere Delay Ripple Banner */}
-        <button
-          type="button"
-          onClick={() => handlePreset('tampere')}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-[#F0A030]/20 border border-[#F0A030]/50 text-xs text-[#F0A030] hover:bg-[#F0A030]/30 transition-colors shadow-sm cursor-pointer"
-        >
-          <AlertCircle size={14} className="shrink-0" />
-          <span className="font-semibold">Tampere viiveaalto (Klikkaa zoom)</span>
-        </button>
-
-        {/* Oulu Blizzard Banner */}
-        <button
-          type="button"
-          onClick={() => handlePreset('oulu')}
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-[#4DA3FF]/15 border border-[#4DA3FF]/40 text-xs text-[#4DA3FF] hover:bg-[#4DA3FF]/25 transition-colors shadow-sm cursor-pointer"
-        >
-          <Snowflake size={14} className="shrink-0" />
-          <span>Oulun lumipyry (FMI)</span>
-        </button>
+    <div className="relative w-full h-full bg-[#0B1118] overflow-hidden">
+      <div ref={containerRef} className="absolute inset-0 cursor-grab active:cursor-grabbing" />
+      {webglError && (
+        <p className="absolute inset-0 flex items-center justify-center text-sm text-[#C4CFDA] p-6 text-center">
+          {fi ? 'WebGL ei ole käytettävissä. Käytä 2D-karttaa tai taulukkonäkymää.' : 'WebGL is not available. Use the 2D map or the table view.'}
+        </p>
+      )}
+      <div className="absolute bottom-3 left-3 z-20 flex gap-1 p-1 rounded-[8px] bg-[#16202A]/90 border border-[#243444]" role="group" aria-label={fi ? 'Kameran esiasetukset' : 'Camera presets'}>
+        {presets.map(([id, lab]) => (
+          <button
+            key={id} type="button" aria-pressed={preset === id} onClick={() => go(id)}
+            className={`px-2.5 py-1 rounded-[6px] text-xs font-medium ${preset === id ? 'bg-[#4DA3FF] text-[#0E141B]' : 'text-[#F2F5F7] hover:bg-[#223242]'}`}
+          >{lab}</button>
+        ))}
       </div>
-
-      {/* Camera View Presets Bottom Dock */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-[#16202A]/90 backdrop-blur-md px-3 py-1.5 rounded-[8px] border border-[#243444] shadow-xl text-xs">
-        <span className="text-[11px] font-mono text-[#9BA9B8] mr-1 flex items-center gap-1">
-          <Eye size={12} /> Kamera:
-        </span>
-        <button
-          type="button"
-          onClick={() => handlePreset('overview')}
-          className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all ${
-            cameraPreset === 'overview'
-              ? 'bg-[#4DA3FF] text-[#0E141B] font-bold shadow-sm'
-              : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
-          }`}
-        >
-          Koko Suomi
-        </button>
-        <button
-          type="button"
-          onClick={() => handlePreset('tampere')}
-          className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all ${
-            cameraPreset === 'tampere'
-              ? 'bg-[#F0A030] text-[#0E141B] font-bold shadow-sm'
-              : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
-          }`}
-        >
-          Tampere Hub (+12m)
-        </button>
-        <button
-          type="button"
-          onClick={() => handlePreset('oulu')}
-          className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all ${
-            cameraPreset === 'oulu'
-              ? 'bg-[#4DA3FF] text-[#0E141B] font-bold shadow-sm'
-              : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
-          }`}
-        >
-          Oulu Lumieste
-        </button>
-      </div>
-
-      {/* Orbit Navigation Hint */}
-      <div className="absolute bottom-4 right-4 z-20 hidden md:flex items-center gap-1.5 text-[10px] font-mono text-[#9BA9B8] bg-[#16202A]/80 px-2.5 py-1 rounded-[6px] border border-[#243444]">
-        <Compass size={12} className="text-[#4DA3FF]" />
-        <span>Vasen klikki: Pyöritä · Rulla: Zoomaa</span>
-      </div>
+      <p className="absolute bottom-3 right-3 z-20 text-[11px] text-[#C4CFDA] bg-[#16202A]/80 px-2 py-1 rounded" aria-hidden="true">
+        {fi ? 'Vedä: kierrä · Rulla: zoomaa · Oikea: siirrä' : 'Drag: orbit · Scroll: zoom · Right-drag: pan'}
+      </p>
     </div>
   );
 };

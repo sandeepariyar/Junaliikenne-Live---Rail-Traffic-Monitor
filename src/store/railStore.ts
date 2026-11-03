@@ -1,4 +1,6 @@
 import { Station, TrackLine, Train, AlertCardItem, DisturbanceReport, ViewMode, Language, TrafficTab } from '../types';
+import { pointAlong } from '../geo/network';
+import { project } from '../geo/projection';
 import { STATIONS, TRACK_LINES, INITIAL_TRAINS, INITIAL_ALERTS, DISTURBANCES } from '../data/railData';
 
 /**
@@ -229,13 +231,18 @@ class RailStore extends EventTarget {
       }
 
       // Small geographic movement along route
-      const movementDelta = (minuteOffset * 0.05);
-      const newY = Math.max(15, Math.min(92, train.y + (train.headingDeg > 180 ? movementDelta : -movementDelta)));
+      // Move along the real track geometry (approx. 2 km per replay minute)
+      let pos = { x: train.x, y: train.y };
+      if (train.lineId && train.along !== undefined) {
+        const raw = train.travelDir ?? 1;
+        pos = pointAlong(train.lineId, train.along + raw * minuteOffset * 0.004);
+      }
 
       return {
         ...train,
         delayMinutes: delay,
-        y: newY,
+        x: pos.x,
+        y: pos.y,
       };
     });
   }
@@ -290,8 +297,7 @@ class RailStore extends EventTarget {
           .map((loc, idx) => {
             const [lon, lat] = loc.location.coordinates;
             // GPS projection math:
-            const x = Math.max(15, Math.min(85, ((lon - 21.0) / 9.5) * 65 + 18));
-            const y = Math.max(15, Math.min(92, 90 - ((lat - 60.0) / 7.5) * 72));
+            const { x, y } = project(lon, lat);
 
             const trainNum = loc.trainNumber;
             let type: 'IC' | 'S' | 'HDM' | 'T' = 'IC';
@@ -315,7 +321,7 @@ class RailStore extends EventTarget {
             let minDist = 999;
             this.stations.forEach((st) => {
               const d = Math.hypot(st.x - x, st.y - y);
-              if (d < minDist && d < 12) {
+              if (d < minDist && d < 3) {
                 minDist = d;
                 nearestStation = `${st.name} alueella`;
               }

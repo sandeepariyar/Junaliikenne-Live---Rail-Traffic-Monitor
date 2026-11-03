@@ -1,22 +1,12 @@
 import { Station, TrackLine, Train, AlertCardItem, DisturbanceReport } from '../types';
+import { geoStation, ROUTES, toPathD, snapToRoutes, pointAlong } from '../geo/network';
 
-// Map coordinate system: 0..100 horizontal (West to East Finland), 0..100 vertical (North to South Finland)
-// Note: Finland is elongated vertically.
-// Helsinki at bottom south (~60.17N, 24.94E) -> x: 44, y: 88
-// Turku at southwest (~60.45N, 22.27E) -> x: 26, y: 86
-// Tampere central south (~61.50N, 23.77E) -> x: 41, y: 74 (Hub)
-// Riihimäki junction -> x: 44, y: 81
-// Lahti -> x: 53, y: 80
-// Kouvola -> x: 64, y: 81
-// Seinäjoki -> x: 38, y: 60
-// Jyväskylä -> x: 54, y: 65
-// Kuopio -> x: 67, y: 55
-// Joensuu -> x: 80, y: 58
-// Oulu -> x: 46, y: 39
-// Kemi -> x: 42, y: 28
-// Rovaniemi -> x: 48, y: 20
+// Map coordinates are ETRS-TM35FIN (EPSG:3067) projected and normalised to map units
+// (1 unit = 12 km, see src/geo/projection.ts). Station positions come from Digitraffic
+// station metadata, track paths from Digitraffic infra-api geometry (scripts/build-geo.ts).
+// Train list, delays and alerts below are EXAMPLE scenario data.
 
-export const STATIONS: Station[] = [
+const RAW_STATIONS: Station[] = [
   { id: 'HKI', name: 'Helsinki', code: 'HKI', x: 44, y: 89, tracks: 19, delayIndex: 8, activeTrainsCount: 14 },
   { id: 'TKU', name: 'Turku', code: 'TKU', x: 26, y: 87, tracks: 7, delayIndex: 34, activeTrainsCount: 4 },
   { id: 'TPE', name: 'Tampere', code: 'TPE', x: 41, y: 74, tracks: 8, delayIndex: 68, activeTrainsCount: 9, isDelayHub: true },
@@ -32,7 +22,15 @@ export const STATIONS: Station[] = [
   { id: 'KEM', name: 'Kemi', code: 'KEM', x: 42, y: 28, tracks: 4, delayIndex: 25, activeTrainsCount: 2 },
 ];
 
-export const TRACK_LINES: TrackLine[] = [
+const DIGITRAFFIC_CODE: Record<string, string> = { JYV: 'JY', OUL: 'OL' };
+const OLD_POS = new Map(RAW_STATIONS.map((s) => [s.id, { x: s.x, y: s.y }]));
+
+export const STATIONS: Station[] = RAW_STATIONS.map((s) => {
+  const g = geoStation(DIGITRAFFIC_CODE[s.id] ?? s.code);
+  return g ? { ...s, x: g.x, y: g.y } : s;
+});
+
+const RAW_TRACK_LINES: TrackLine[] = [
   // Päärata (Main line: Helsinki -> Riihimäki -> Tampere -> Seinäjoki -> Oulu -> Kemi -> Rovaniemi)
   { id: 'line-hki-ri', name: 'Päärata (HKI-RI)', from: 'HKI', to: 'RI', path: 'M 44 89 L 44 82', isDoubleTrack: true, status: 'normal' },
   { id: 'line-ri-tpe', name: 'Päärata (RI-TPE)', from: 'RI', to: 'TPE', path: 'M 44 82 Q 43 78 41 74', isDoubleTrack: true, status: 'delay_cascade' },
@@ -55,12 +53,32 @@ export const TRACK_LINES: TrackLine[] = [
 
   // Savo & Karjala lines
   { id: 'line-ri-lh', name: 'Riihimäki - Lahti', from: 'RI', to: 'LH', path: 'M 44 82 L 53 80', isDoubleTrack: true, status: 'normal' },
-  { id: 'line-lh-kv', name: 'Oikorata (LH-KV)', from: 'LH', to: 'KV', path: 'M 53 80 L 64 81', isDoubleTrack: true, status: 'normal' },
+  { id: 'line-lh-kv', name: 'Lahti – Kouvola', from: 'LH', to: 'KV', path: 'M 53 80 L 64 81', isDoubleTrack: true, status: 'normal' },
   { id: 'line-kv-kuo', name: 'Savon rata (KV-KUO)', from: 'KV', to: 'KUO', path: 'M 64 81 Q 66 68 68 55', isDoubleTrack: false, status: 'normal' },
   { id: 'line-kuo-oul', name: 'Kuopio - Oulu', from: 'KUO', to: 'OUL', path: 'M 68 55 Q 58 46 46 39', isDoubleTrack: false, status: 'weather_alert' },
 ];
 
-export const INITIAL_TRAINS: Train[] = [
+export const TRACK_LINES: TrackLine[] = RAW_TRACK_LINES.map((l) =>
+  ROUTES[l.id] ? { ...l, path: toPathD(ROUTES[l.id]) } : l,
+);
+
+// Least-squares affine fit from the old schematic coordinates to real projected ones,
+// used once to place the example trains, which are then snapped onto real track.
+const affine = (() => {
+  const pairs = STATIONS.map((s) => [OLD_POS.get(s.id)!, s] as const);
+  const solve = (key: 'x' | 'y') => {
+    // normal equations for v = a*x + b*y + c
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; const r = [0, 0, 0];
+    pairs.forEach(([o, n]) => { const v = [o.x, o.y, 1]; for (let i = 0; i < 3; i++) { r[i] += v[i] * n[key]; for (let j = 0; j < 3; j++) M[i][j] += v[i] * v[j]; } });
+    for (let i = 0; i < 3; i++) for (let k = i + 1; k < 3; k++) { const f = M[k][i] / M[i][i]; for (let j = 0; j < 3; j++) M[k][j] -= f * M[i][j]; r[k] -= f * r[i]; }
+    const c = [0, 0, 0]; for (let i = 2; i >= 0; i--) { c[i] = (r[i] - M[i].slice(i + 1).reduce((s, m, j) => s + m * c[i + 1 + j], 0)) / M[i][i]; }
+    return c;
+  };
+  const cx = solve('x'), cy = solve('y');
+  return (x: number, y: number) => ({ x: cx[0] * x + cx[1] * y + cx[2], y: cy[0] * x + cy[1] * y + cy[2] });
+})();
+
+const RAW_TRAINS: Train[] = [
   {
     id: 'ic-27',
     type: 'IC',
@@ -317,6 +335,14 @@ export const INITIAL_TRAINS: Train[] = [
     operatorNotes: 'Konttikuljetus satamaan aikataulussa.'
   }
 ];
+
+export const INITIAL_TRAINS: Train[] = RAW_TRAINS.map((t) => {
+  const approx = affine(t.x, t.y);
+  const { lineId, t: along } = snapToRoutes(approx.x, approx.y);
+  const p = pointAlong(lineId, along);
+  const dir = t.headingDeg > 90 && t.headingDeg < 270 ? 1 : -1;
+  return { ...t, x: p.x, y: p.y, headingDeg: (p.headingDeg + (dir < 0 ? 180 : 0) + 360) % 360, lineId, along, travelDir: dir };
+});
 
 export const INITIAL_ALERTS: AlertCardItem[] = [
   {

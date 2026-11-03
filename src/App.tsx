@@ -33,13 +33,10 @@ export default function App() {
     };
   }, []);
 
-  // Update inspectTrain whenever selectedTrain changes
+  // Keep an already-open detail dialog in sync with live data (never auto-open on load)
   useEffect(() => {
-    if (state.selectedTrainId) {
-      const found = state.trains.find((t) => t.id === state.selectedTrainId);
-      if (found) setInspectTrain(found);
-    }
-  }, [state.selectedTrainId, state.trains]);
+    setInspectTrain((cur) => (cur ? state.trains.find((t) => t.id === cur.id) ?? cur : cur));
+  }, [state.trains]);
 
   const handleSelectTrain = (train: Train) => {
     railStore.setSelectedTrain(train.id);

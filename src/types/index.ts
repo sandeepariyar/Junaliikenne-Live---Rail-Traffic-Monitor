@@ -6,8 +6,8 @@ export interface Station {
   id: string;
   name: string;
   code: string;
-  x: number; // 0 - 100 percentage in geographic SVG coordinate space
-  y: number; // 0 - 100 percentage
+  x: number; // map units (EPSG:3067 normalised, 1 unit = 12 km)
+  y: number;
   tracks: number;
   delayIndex: number; // 0 - 100
   activeTrainsCount: number;
@@ -43,6 +43,10 @@ export interface Train {
   x: number;
   y: number;
   headingDeg: number;
+  /** Scenario route the train runs on and its position (0..1) along it. */
+  lineId?: string;
+  along?: number;
+  travelDir?: 1 | -1;
   connectingTrains?: string[];
   operatorNotes?: string;
 }
