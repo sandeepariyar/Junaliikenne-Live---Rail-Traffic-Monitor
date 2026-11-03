@@ -1,0 +1,67 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Color Tokens according to design specification */
+  --bg-primary: #0E141B;
+  --surface: #16202A;
+  --surface-raised: #1C2836;
+  --surface-hover: #223242;
+  --border-subtle: #243444;
+  --border-focus: #4DA3FF;
+
+  --text-primary: #F2F5F7;
+  --text-secondary: #9BA9B8;
+  --text-muted: #6C7D8F;
+
+  --color-ok: #3FB950;
+  --color-warning: #F0A030;
+  --color-danger: #F25555;
+  --color-info: #4DA3FF;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono,
+.tabular-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars for control room data panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #111822;
+}
+::-webkit-scrollbar-thumb {
+  background: #243444;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #354a5e;
+}
+
+/* Accessibility Focus Ring (WCAG 2.2 AA compliant high contrast) */
+*:focus-visible {
+  outline: 2px solid #4DA3FF !important;
+  outline-offset: 2px !important;
+}
+
+/* Reduced motion support */
+.reduce-motion * {
+  animation: none !important;
+  transition: none !important;
+}
