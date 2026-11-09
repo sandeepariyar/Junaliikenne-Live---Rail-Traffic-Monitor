@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Train, Search, Globe, Eye, ZapOff, Sparkles, Layers } from 'lucide-react';
 import { FtSegmentedControl } from './design-system/FtSegmentedControl';
-import { FtToggle } from './design-system/FtToggle';
+import { FtToggle } from './web-components';
 import { ViewMode, Language } from '../types';
 import { TRANSLATIONS } from '../data/railData';
-import { DataSourceMode } from '../store/railStore';
+import { DataSourceMode, DataState } from '../store/railStore';
+import { DataSourceBadge } from './DataSourceBadge';
 
 export interface TopBarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   dataSourceMode: DataSourceMode;
   onDataSourceModeChange: (mode: DataSourceMode) => void;
-  lastSyncTime?: string;
+  dataState: DataState;
+  lastLiveSuccess: number;
+  lastGpsTimestamp: string | null;
   focusMode: boolean;
   onFocusModeChange: (enabled: boolean) => void;
   reducedMotion: boolean;
@@ -26,7 +29,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   onViewModeChange,
   dataSourceMode,
   onDataSourceModeChange,
-  lastSyncTime,
+  dataState,
+  lastLiveSuccess,
+  lastGpsTimestamp,
   focusMode,
   onFocusModeChange,
   reducedMotion,
@@ -75,49 +80,48 @@ export const TopBar: React.FC<TopBarProps> = ({
           <h1 className="text-base font-bold text-[#F2F5F7] tracking-tight whitespace-nowrap">
             {t.appTitle}
           </h1>
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[4px] bg-[#3FB950]/15 border border-[#3FB950]/30 text-[#3FB950] text-[11px] font-semibold font-mono uppercase tracking-wider">
-            <span
-              className={`w-1.5 h-1.5 rounded-full bg-[#3FB950] ${
-                reducedMotion ? '' : 'animate-pulse'
-              }`}
-              aria-hidden="true"
-            />
-            <span>{t.live}</span>
-          </div>
+          <DataSourceBadge
+            state={dataState}
+            lastLiveSuccess={lastLiveSuccess}
+            lastGpsTimestamp={lastGpsTimestamp}
+            language={language}
+            reducedMotion={reducedMotion}
+          />
         </div>
 
         {/* Data Source Mode Toggle: Scenario vs Digitraffic Live API */}
-        <div className="hidden xl:flex items-center bg-[#0E141B] p-0.5 rounded-[6px] border border-[#243444] text-[11px] font-mono">
+        <div role="group" aria-label={language === 'fi' ? 'Datalähde' : 'Data source'} className="hidden xl:flex items-center bg-[#0E141B] p-0.5 rounded-[6px] border border-[#243444] text-[11px] font-mono">
           <button
             type="button"
             onClick={() => onDataSourceModeChange('scenario')}
+            aria-pressed={dataSourceMode === 'scenario'}
             className={`px-2 py-0.5 rounded-[4px] transition-colors ${
               dataSourceMode === 'scenario'
                 ? 'bg-[#1C2836] text-[#F0A030] font-bold border border-[#F0A030]/40'
                 : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
             }`}
-            title="Harjoitusskenaario: IC 27 & Tampereen viiveketju"
+            title={language === 'fi' ? 'Koulutusskenaario: simuloitu IC 27 / Tampereen viiveketju' : 'Training scenario: simulated IC 27 / Tampere delay cascade'}
           >
-            Häiriöskenaario
+            {language === 'fi' ? 'Skenaario' : 'Scenario'}
           </button>
           <button
             type="button"
             onClick={() => onDataSourceModeChange('live')}
+            aria-pressed={dataSourceMode === 'live'}
             className={`px-2 py-0.5 rounded-[4px] transition-colors flex items-center gap-1 ${
               dataSourceMode === 'live'
                 ? 'bg-[#1C2836] text-[#3FB950] font-bold border border-[#3FB950]/40'
                 : 'text-[#9BA9B8] hover:text-[#F2F5F7]'
             }`}
-            title="Aito Digitraffic API: Reaaliaikaiset GPS-sijainnit Fintrafficilta"
+            title={language === 'fi' ? 'Digitraffic train-locations: junien todelliset GPS-sijainnit' : 'Digitraffic train-locations: real train GPS positions'}
           >
-            <span>Digitraffic GPS Live</span>
-            {lastSyncTime && <span className="text-[9px] opacity-75">({lastSyncTime})</span>}
+            <span>Digitraffic live</span>
           </button>
         </div>
       </div>
 
       {/* 2. Center Zone: Centered search field with Ctrl+K hint */}
-      <div className="flex-1 max-w-md mx-2">
+      <div className="flex-1 min-w-0 max-w-md mx-2">
         <button
           type="button"
           onClick={onOpenSearch}
@@ -157,19 +161,19 @@ export const TopBar: React.FC<TopBarProps> = ({
         <FtToggle
           label={t.focusMode}
           checked={focusMode}
-          onChange={onFocusModeChange}
-          icon={<Eye size={13} />}
-          id="toggle-focus-mode"
-        />
+          onToggleChange={(e: Event) => onFocusModeChange((e as CustomEvent<{ checked: boolean }>).detail.checked)}
+        >
+          <Eye slot="icon" size={13} />
+        </FtToggle>
 
         {/* Toggle: Vähennä liikettä */}
         <FtToggle
           label={t.reduceMotion}
           checked={reducedMotion}
-          onChange={onReducedMotionChange}
-          icon={<ZapOff size={13} />}
-          id="toggle-reduce-motion"
-        />
+          onToggleChange={(e: Event) => onReducedMotionChange((e as CustomEvent<{ checked: boolean }>).detail.checked)}
+        >
+          <ZapOff slot="icon" size={13} />
+        </FtToggle>
 
         <div className="h-5 w-px bg-[#243444]" aria-hidden="true" />
 
@@ -190,7 +194,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="h-5 w-px bg-[#243444]" aria-hidden="true" />
 
         {/* Lead Operator Badge: Sandeep Pariyar */}
-        <div className="hidden lg:flex items-center gap-2 px-2 py-1 rounded-[6px] bg-[#111822] border border-[#243444] text-xs">
+        <div className="hidden 2xl:flex items-center gap-2 px-2 py-1 rounded-[6px] bg-[#111822] border border-[#243444] text-xs">
           <div className="w-5 h-5 rounded-full bg-[#4DA3FF]/20 border border-[#4DA3FF]/40 flex items-center justify-center text-[10px] font-bold text-[#80BDFF] font-mono">
             SP
           </div>
@@ -200,7 +204,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
         </div>
 
-        <div className="h-5 w-px bg-[#243444]" aria-hidden="true" />
+        <div className="hidden 2xl:block h-5 w-px bg-[#243444]" aria-hidden="true" />
 
         {/* Clock with Finnish/European format */}
         <div className="flex items-baseline gap-1.5 pl-1 font-mono tabular-nums text-xs">

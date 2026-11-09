@@ -8,7 +8,7 @@ export interface LitSegmentOption {
 
 /**
  * <ft-segmented-control>
- * Standards-compliant Lit Web Component for 2D | 3D Elävä kartta
+ * Lit Web Component for 2D | 3D Elävä kartta
  */
 @customElement('ft-segmented-control')
 export class FtSegmentedControlElement extends LitElement {

@@ -4,10 +4,23 @@ import { project } from '../geo/projection';
 import { STATIONS, TRACK_LINES, INITIAL_TRAINS, INITIAL_ALERTS, DISTURBANCES } from '../data/railData';
 
 /**
- * RailStore: Lightweight EventTarget reactive store
- * Standards-based, zero-heavy-framework state container.
+ * RailStore: a small reactive store built on the platform's EventTarget.
+ * Components subscribe to the 'state-changed' event (see App.tsx).
+ *
+ * Data provenance is explicit:
+ *  - 'scenario'   simulated training data (bundled), clearly labelled
+ *  - 'connecting' live mode selected, first response not yet received
+ *  - 'live'       verified Digitraffic train-locations data, < STALE_AFTER_MS old
+ *  - 'stale'      last good live data is older than STALE_AFTER_MS (timestamp shown)
+ *  - 'offline'    live mode selected but no data could be fetched; nothing is substituted
+ * Live mode never falls back to scenario data silently.
  */
 export type DataSourceMode = 'scenario' | 'live';
+export type DataState = 'scenario' | 'connecting' | 'live' | 'stale' | 'offline';
+
+export const STALE_AFTER_MS = 60_000;
+const POLL_MS = 15_000;
+const LIVE_API = 'https://rata.digitraffic.fi/api/v1/train-locations/latest';
 
 class RailStore extends EventTarget {
   private trains: Train[] = [...INITIAL_TRAINS];
@@ -17,9 +30,18 @@ class RailStore extends EventTarget {
   private alerts: AlertCardItem[] = [...INITIAL_ALERTS];
   private disturbances: DisturbanceReport[] = [...DISTURBANCES];
 
-  private dataSourceMode: DataSourceMode = 'scenario'; // 'scenario' | 'live'
-  private lastSyncTime: string = '';
+  private liveStations: Station[] = STATIONS.map((s) => ({ ...s, isDelayHub: false, delayIndex: 0, activeTrainsCount: 0 }));
+  private liveTracks: TrackLine[] = TRACK_LINES.map((t) => ({ ...t, status: 'normal' as const }));
+
+  private dataSourceMode: DataSourceMode = 'scenario';
+  /** Epoch ms of the last successful live fetch (0 = never). */
+  private lastLiveSuccess = 0;
+  /** Newest GPS timestamp contained in the last live response (ISO). */
+  private lastGpsTimestamp: string | null = null;
+  private liveError: string | null = null;
+  private liveFetching = false;
   private livePollTimer: number | null = null;
+  private staleTimer: number | null = null;
 
   private viewMode: ViewMode = '2D';
   private focusMode: boolean = false;
@@ -46,15 +68,28 @@ class RailStore extends EventTarget {
   }
 
   // --- Getters ---
+  getDataState(): DataState {
+    if (this.dataSourceMode === 'scenario') return 'scenario';
+    if (!this.lastLiveSuccess) return this.liveError ? 'offline' : 'connecting';
+    if (Date.now() - this.lastLiveSuccess > STALE_AFTER_MS) return 'stale';
+    return 'live';
+  }
+
   getState() {
+    const isLive = this.dataSourceMode === 'live';
     return {
-      trains: this.dataSourceMode === 'live' && this.liveTrains.length > 0 ? this.liveTrains : this.trains,
-      stations: this.stations,
-      tracks: this.tracks,
-      alerts: this.alerts,
-      disturbances: this.disturbances,
+      // Live mode shows only live records — never scenario trains, alerts or disruptions.
+      trains: isLive ? this.liveTrains : this.trains,
+      // Scenario-only overlays (delay hubs, weather/cascade track states) are stripped in live mode.
+      stations: isLive ? this.liveStations : this.stations,
+      tracks: isLive ? this.liveTracks : this.tracks,
+      alerts: isLive ? [] : this.alerts,
+      disturbances: isLive ? [] : this.disturbances,
       dataSourceMode: this.dataSourceMode,
-      lastSyncTime: this.lastSyncTime,
+      dataState: this.getDataState(),
+      lastLiveSuccess: this.lastLiveSuccess,
+      lastGpsTimestamp: this.lastGpsTimestamp,
+      liveError: this.liveError,
       viewMode: this.viewMode,
       focusMode: this.focusMode,
       reducedMotion: this.reducedMotion,
@@ -132,7 +167,9 @@ class RailStore extends EventTarget {
     this.notify();
   }
 
+  /** Training-scenario actions only. They change simulated state, never real operations. */
   executeAlertAction(alertId: string) {
+    if (this.dataSourceMode !== 'scenario') return;
     this.alerts = this.alerts.map((alert) => {
       if (alert.id === alertId) {
         return { ...alert, actionDone: true };
@@ -141,7 +178,7 @@ class RailStore extends EventTarget {
     });
 
     if (alertId === 'alert-1') {
-      this.setToast('Toimenpide hyväksytty: S 365 pitoaikaa jatkettu 3 min Tampereella.');
+      this.setToast('Harjoitus: S 365 pitoaikaa jatkettu 3 min Tampereella (simuloitu, ei todellinen toimenpide).');
       // Update S 365 delay & notes
       this.trains = this.trains.map((train) => {
         if (train.id === 's-365') {
@@ -154,9 +191,9 @@ class RailStore extends EventTarget {
         return train;
       });
     } else if (alertId === 'alert-2') {
-      this.setToast('Korvaavat linja-autot (2 kpl) tilattu Salon asemalle.');
+      this.setToast('Harjoitus: korvaavien linja-autojen tilaus kirjattu skenaarioon (simuloitu, ei todellinen tilaus).');
     } else if (alertId === 'alert-3') {
-      this.setToast('Pohjanmaan radan talvinopeusrajoitus (140 km/h) aktivoitu.');
+      this.setToast('Harjoitus: nopeusrajoitus merkitty skenaarioon (simuloitu, ei todellinen toimenpide).');
     }
 
     this.notify();
@@ -247,116 +284,111 @@ class RailStore extends EventTarget {
     });
   }
 
-  // --- Data Source Mode (Scenario vs Real Live Digitraffic API) ---
+  // --- Data source mode (training scenario vs. Digitraffic live) ---
   setDataSourceMode(mode: DataSourceMode) {
     this.dataSourceMode = mode;
     if (mode === 'live') {
+      this.pauseReplay();
+      this.liveError = null;
       this.fetchLiveDigitrafficData();
       if (!this.livePollTimer) {
-        // Poll every 15 seconds
-        this.livePollTimer = window.setInterval(() => {
-          if (this.dataSourceMode === 'live') {
-            this.fetchLiveDigitrafficData();
-          }
-        }, 15000);
+        this.livePollTimer = window.setInterval(() => this.fetchLiveDigitrafficData(), POLL_MS);
       }
-      this.setToast('Yhdistetty Fintraffic Digitraffic API:in. Ladataan reaaliaikaiset GPS-sijainnit...');
+      // Re-evaluate staleness even when no new response arrives.
+      if (!this.staleTimer) {
+        this.staleTimer = window.setInterval(() => this.notify(), 5_000);
+      }
+      this.setToast('Live-tila: haetaan junien GPS-sijainnit Digitraffic-rajapinnasta.');
     } else {
-      if (this.livePollTimer) {
-        clearInterval(this.livePollTimer);
-        this.livePollTimer = null;
-      }
-      this.setToast('Koulutusskenaario aktivoitu: IC 27 & Tampereen viiveketju.');
+      if (this.livePollTimer) clearInterval(this.livePollTimer);
+      if (this.staleTimer) clearInterval(this.staleTimer);
+      this.livePollTimer = null;
+      this.staleTimer = null;
+      this.setToast('Koulutusskenaario: simuloitu data, ei todellisia toimenpiteitä.');
     }
     this.notify();
   }
 
-  // --- Real Digitraffic Open API Fetcher ---
-  async fetchLiveDigitrafficData() {
-    try {
-      // 1. Fetch real-time GPS locations of all active trains in Finland
-      const res = await fetch('https://rata.digitraffic.fi/api/v1/train-locations/latest', {
-        headers: { 'Accept': 'application/json' },
-      });
+  retryLive() {
+    if (this.dataSourceMode === 'live') this.fetchLiveDigitrafficData();
+  }
 
-      if (!res.ok) throw new Error('Digitraffic API error');
+  /**
+   * Fetches real-time GPS positions. Only fields present in the API response are used:
+   * trainNumber, departureDate, speed, timestamp, location. Delay, train category,
+   * origin/destination and passenger counts are NOT in this API and are shown as unavailable.
+   */
+  async fetchLiveDigitrafficData() {
+    if (this.liveFetching) return;
+    this.liveFetching = true;
+    try {
+      const res = await fetch(LIVE_API, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const locations: Array<{
         trainNumber: number;
+        departureDate: string;
         speed: number;
         timestamp: string;
         location: { coordinates: [number, number] }; // [lon, lat]
       }> = await res.json();
+      if (!Array.isArray(locations)) throw new Error('Unexpected response');
+      if (this.dataSourceMode !== 'live') return;
 
-      if (Array.isArray(locations) && locations.length > 0) {
-        // Map raw GPS [lon, lat] to Finland screen coordinates (0..100)
-        // Finland GPS bounds: Lon ~21.0 to 30.5, Lat ~60.0 to 67.5
-        const parsedLiveTrains: Train[] = locations
-          .filter((loc) => loc.location?.coordinates && loc.speed >= 0)
-          .slice(0, 35) // Take top active trains
-          .map((loc, idx) => {
-            const [lon, lat] = loc.location.coordinates;
-            // GPS projection math:
-            const { x, y } = project(lon, lat);
+      let newest = '';
+      this.liveTrains = locations
+        .filter((loc) => Array.isArray(loc.location?.coordinates))
+        .map((loc) => {
+          const [lon, lat] = loc.location.coordinates;
+          const { x, y } = project(lon, lat);
+          if (loc.timestamp > newest) newest = loc.timestamp;
 
-            const trainNum = loc.trainNumber;
-            let type: 'IC' | 'S' | 'HDM' | 'T' = 'IC';
-            let prefix = 'IC';
-            if (trainNum < 70) {
-              type = 'IC';
-              prefix = 'IC';
-            } else if (trainNum < 150) {
-              type = 'S';
-              prefix = 'S';
-            } else if (trainNum < 1000) {
-              type = 'HDM';
-              prefix = 'HL';
-            } else {
-              type = 'T';
-              prefix = 'T';
-            }
-
-            // Estimate nearest station
-            let nearestStation = 'Rataosuudella';
-            let minDist = 999;
-            this.stations.forEach((st) => {
-              const d = Math.hypot(st.x - x, st.y - y);
-              if (d < minDist && d < 3) {
-                minDist = d;
-                nearestStation = `${st.name} alueella`;
-              }
-            });
-
-            return {
-              id: `live-${trainNum}`,
-              type,
-              number: `${prefix} ${trainNum}`,
-              route: `Juna ${trainNum} (GPS Live)`,
-              origin: 'Fintraffic',
-              destination: nearestStation,
-              scheduledTime: 'Reaaliaika',
-              estimatedTime: loc.speed > 0 ? `${loc.speed} km/h` : 'Pysähdyksissä',
-              delayMinutes: loc.speed < 40 && loc.speed > 0 ? 5 : 0,
-              status: 'on_time' as const,
-              currentStation: nearestStation,
-              nextStation: '-',
-              speedKmH: loc.speed,
-              passengers: type === 'T' ? 0 : Math.round(100 + (trainNum % 250)),
-              progressPercent: 50,
-              x,
-              y,
-              headingDeg: 180,
-              operatorNotes: `Reaaliaikainen GPS-signaali vastaanotettu: ${new Date(loc.timestamp).toLocaleTimeString('fi-FI')}. Tarkkuus normaali.`
-            };
+          // Nearest station is derived from the real GPS position (within ~36 km).
+          let near: Station | null = null;
+          let minDist = 3;
+          this.stations.forEach((st) => {
+            const d = Math.hypot(st.x - x, st.y - y);
+            if (d < minDist) { minDist = d; near = st; }
           });
+          const nearName = near ? `lähellä: ${(near as Station).name}` : 'Rataosuudella';
+          const fix = new Date(loc.timestamp).toLocaleTimeString('fi-FI');
 
-        this.liveTrains = parsedLiveTrains;
-        this.lastSyncTime = new Date().toLocaleTimeString('fi-FI');
-        this.setToast(`Digitraffic API: ${parsedLiveTrains.length} reaaliaikaista junaa päivitetty.`);
-        this.notify();
-      }
+          return {
+            id: `live-${loc.departureDate}-${loc.trainNumber}`,
+            type: 'GPS' as const,
+            number: `${loc.trainNumber}`,
+            route: `Juna ${loc.trainNumber} · ${loc.departureDate}`,
+            origin: '—',
+            destination: '—',
+            scheduledTime: '—',
+            estimatedTime: loc.speed > 0 ? `${loc.speed} km/h` : 'Pysähdyksissä',
+            delayMinutes: null,
+            status: 'on_time' as const,
+            currentStation: nearName,
+            nextStation: '—',
+            speedKmH: loc.speed,
+            passengers: null,
+            progressPercent: 0,
+            x,
+            y,
+            headingDeg: 180,
+            source: 'live' as const,
+            gpsTimestamp: loc.timestamp,
+            operatorNotes: `GPS-sijainti Digitraffic-rajapinnasta, aikaleima ${fix}. Viive-, reitti- ja matkustajatietoja ei ole tässä rajapinnassa.`,
+          } satisfies Train;
+        });
+
+      this.lastLiveSuccess = Date.now();
+      this.lastGpsTimestamp = newest || null;
+      this.liveError = null;
+      this.notify();
     } catch (err) {
-      console.warn('Digitraffic API fetch failed, maintaining scenario:', err);
+      // No silent fallback: keep last good live data (shown as stale) or show offline.
+      this.liveError = err instanceof Error ? err.message : String(err);
+      console.warn('Digitraffic fetch failed:', err);
+      this.notify();
+    } finally {
+      this.liveFetching = false;
     }
   }
 }

@@ -9,6 +9,8 @@ export interface TimelineReplayProps {
   onTogglePlay: () => void;
   onSeek: (minutes: number) => void;
   language: Language;
+  /** Replay works on the simulated scenario only. */
+  disabled?: boolean;
 }
 
 export const TimelineReplay: React.FC<TimelineReplayProps> = ({
@@ -17,11 +19,12 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
   onTogglePlay,
   onSeek,
   language,
+  disabled = false,
 }) => {
   const t = TRANSLATIONS[language];
 
   const getLabelForTime = (mins: number) => {
-    if (mins === 0) return 'Nyt (Reaaliaika)';
+    if (mins === 0) return 'Nyt (skenaario)';
     if (mins < 0) return `${mins} min`;
     return `+${mins} min ennuste`;
   };
@@ -55,6 +58,13 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
         </div>
       </div>
 
+      {disabled ? (
+        <p className="flex-1 flex items-center text-xs text-[#B6C2CF]">
+          {language === 'fi'
+            ? 'Aikajanan toisto on käytettävissä vain koulutusskenaariossa. Live-tila näyttää vain viimeisimmät GPS-sijainnit.'
+            : 'Replay is available in the training scenario only. Live mode shows the latest GPS positions only.'}
+        </p>
+      ) : (<>
       {/* Control Buttons & Slider */}
       <div className="flex items-center gap-3">
         {/* Rewind 10 min */}
@@ -157,6 +167,7 @@ export const TimelineReplay: React.FC<TimelineReplayProps> = ({
           +30 min ennuste
         </button>
       </div>
+      </>)}
     </div>
   );
 };

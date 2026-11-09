@@ -9,7 +9,7 @@ export interface LitTabItem {
 
 /**
  * <ft-tabs>
- * Standards-compliant Lit Web Component for control-room tabs
+ * Lit Web Component for control-room tabs (APG tabs pattern).
  * Full keyboard navigation: Left/Right arrows, Home, End, visible focus ring.
  * The active panel content is slotted into an internal role="tabpanel" so that
  * aria-controls / aria-labelledby resolve inside the same shadow root.
@@ -17,11 +17,23 @@ export interface LitTabItem {
 @customElement('ft-tabs')
 export class FtTabsElement extends LitElement {
   @property({ type: Array }) tabs: LitTabItem[] = [];
-  @property({ type: String }) activeTabId: string = '';
+  @property({ type: String, attribute: 'active-tab-id' }) activeTabId: string = '';
+  /** Accessible name for the tablist. */
+  @property({ type: String }) label: string = 'Tabs';
 
   static override styles = css`
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .tab-list {
@@ -100,7 +112,7 @@ export class FtTabsElement extends LitElement {
 
   override render() {
     return html`
-      <div class="tab-list" role="tablist" aria-label="Junaliikenteen tilanne välilehdet">
+      <div class="tab-list" part="tablist" role="tablist" aria-label="${this.label}">
         ${this.tabs.map((tab, idx) => {
           const isActive = tab.id === this.activeTabId;
           return html`
@@ -129,6 +141,7 @@ export class FtTabsElement extends LitElement {
         id="panel-${this.activeTabId}"
         aria-labelledby="tab-${this.activeTabId}"
         tabindex="0"
+        part="panel"
         class="panel"
       >
         <slot></slot>

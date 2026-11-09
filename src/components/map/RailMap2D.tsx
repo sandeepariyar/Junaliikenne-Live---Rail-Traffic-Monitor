@@ -1,3 +1,4 @@
+import { trainStatus } from '../../lib/trainStatus';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Station, TrackLine, Train, Language } from '../../types';
 import { FINLAND_POLYGONS, RAIL_NETWORK, GEO_STATIONS, MAP_BOUNDS, toPathD } from '../../geo/network';
@@ -7,6 +8,7 @@ export const TRAIN_COLORS: Record<Train['type'], string> = {
   S: '#4DA3FF',
   HDM: '#A371F7',
   T: '#F0A030',
+  GPS: '#80BDFF',
 };
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
@@ -130,7 +132,7 @@ export const RailMap2D: React.FC<Props> = ({
   const majorCodes = new Set(stations.map((s) => s.code));
   const minorStations = zoomed ? GEO_STATIONS.filter((g) => !majorCodes.has(g.code) && !['JY', 'OL'].includes(g.code)) : [];
   const kmUnits = 100 / 12; // 100 km in map units
-  const visibleTrains = focusMode ? trains.filter((t) => t.delayMinutes > 0 || t.status === 'cancelled' || t.id === selectedTrainId) : trains;
+  const visibleTrains = focusMode ? trains.filter((t) => (t.delayMinutes ?? 0) > 0 || t.status === 'cancelled' || t.id === selectedTrainId) : trains;
 
   const label = language === 'fi'
     ? 'Suomen rataverkko, asemat ja junien sijainnit. Sama tieto taulukkona Junaliikenteen tilanne -paneelissa.'
@@ -255,7 +257,7 @@ export const RailMap2D: React.FC<Props> = ({
               data-hit
               role="button"
               tabIndex={0}
-              aria-label={`${t.number}${t.delayMinutes > 0 && !cancelled ? ` +${t.delayMinutes}` : ''} ${t.route}, ${cancelled ? (language === 'fi' ? 'peruttu' : 'cancelled') : t.delayMinutes > 0 ? `+${t.delayMinutes} min` : language === 'fi' ? 'ajallaan' : 'on time'}`}
+              aria-label={`${t.number}${(t.delayMinutes ?? 0) > 0 && !cancelled ? ` +${t.delayMinutes}` : ''} ${t.route}, ${trainStatus(t, language).text.toLowerCase()}`}
               aria-pressed={sel}
               className="cursor-pointer ft-map-target"
               onClick={() => onSelectTrain(t)}
@@ -268,7 +270,7 @@ export const RailMap2D: React.FC<Props> = ({
               transform={`translate(${t.x} ${t.y})`}
             >
               <circle r={px(12)} fill="transparent" />
-              {(t.delayMinutes > 0 || sel) && !cancelled && (
+              {((t.delayMinutes ?? 0) > 0 || sel) && !cancelled && (
                 <circle r={px(9)} fill="none" stroke={sel ? '#F2F5F7' : '#F0A030'} strokeWidth={px(1.5)} opacity={0.9} />
               )}
               {!cancelled && (
@@ -278,9 +280,9 @@ export const RailMap2D: React.FC<Props> = ({
               {cancelled && (
                 <path d={`M ${-px(3)} ${-px(3)} L ${px(3)} ${px(3)} M ${px(3)} ${-px(3)} L ${-px(3)} ${px(3)}`} stroke="#F25555" strokeWidth={px(1.6)} />
               )}
-              {(t.delayMinutes >= 5 || sel) && !cancelled && (
-                <text x={px(11)} y={-px(8)} fontSize={px(10.5)} fontWeight={700} fill={t.delayMinutes > 0 ? '#F0A030' : '#F2F5F7'} className="ft-map-label font-mono">
-                  {t.number}{t.delayMinutes > 0 ? ` +${t.delayMinutes}` : ''}
+              {((t.delayMinutes ?? 0) >= 5 || sel) && !cancelled && (
+                <text x={px(11)} y={-px(8)} fontSize={px(10.5)} fontWeight={700} fill={(t.delayMinutes ?? 0) > 0 ? '#F0A030' : '#F2F5F7'} className="ft-map-label font-mono">
+                  {t.number}{(t.delayMinutes ?? 0) > 0 ? ` +${t.delayMinutes ?? 0}` : ''}
                 </text>
               )}
             </g>
@@ -301,8 +303,8 @@ export const RailMap2D: React.FC<Props> = ({
         >
           <div className="flex justify-between font-mono font-bold text-[#F2F5F7]">
             <span>{hover.number}</span>
-            <span className={hover.status === 'cancelled' ? 'text-[#FF8080]' : hover.delayMinutes > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}>
-              {hover.status === 'cancelled' ? (language === 'fi' ? 'Peruttu' : 'Cancelled') : hover.delayMinutes > 0 ? `+${hover.delayMinutes} min` : language === 'fi' ? 'Ajallaan' : 'On time'}
+            <span className={hover.status === 'cancelled' ? 'text-[#FF8080]' : hover.delayMinutes === null ? 'text-[#B6C2CF]' : hover.delayMinutes > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}>
+              {trainStatus(hover, language).text}
             </span>
           </div>
           <div className="text-[11px] text-[#C4CFDA] mt-0.5 truncate">{hover.route}</div>

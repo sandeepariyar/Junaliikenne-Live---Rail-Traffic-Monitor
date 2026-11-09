@@ -5,7 +5,7 @@ export type AlertCardVariant = 'warning' | 'danger' | 'info';
 
 /**
  * <ft-alert-card>
- * Standards-compliant Lit Web Component for attention-now cards
+ * Lit Web Component for attention-now cards
  * Handles Shadow DOM, keyboard focus, and dispatching action events.
  */
 @customElement('ft-alert-card')

@@ -81,3 +81,65 @@ test('3D view', async ({ page }) => {
   await page.waitForTimeout(1500);
   await audit(page, '3D');
 });
+
+// ---- Data provenance states -------------------------------------------------
+
+const LIVE_FIXTURE = [
+  { trainNumber: 27, departureDate: '2026-11-09', speed: 118, timestamp: new Date().toISOString(), location: { type: 'Point', coordinates: [24.94, 60.17] } },
+  { trainNumber: 9131, departureDate: '2026-11-09', speed: 0, timestamp: new Date().toISOString(), location: { type: 'Point', coordinates: [23.76, 61.5] } },
+];
+
+test('live mode shows only real API fields, no scenario data', async ({ page }) => {
+  await page.unroute('**/rata.digitraffic.fi/**');
+  await page.route('**/rata.digitraffic.fi/**', (r) => r.fulfill({ json: LIVE_FIXTURE }));
+  await page.getByRole('button', { name: /Digitraffic live/ }).click();
+  const badge = page.getByTestId('data-source-badge');
+  await expect(badge).toHaveAttribute('data-state', 'live');
+  // Only the two fixture trains; scenario trains (IC 27 scenario, IC 35 …) are gone.
+  await expect(page.getByRole('row', { name: /IC 35/ })).toHaveCount(0);
+  await expect(page.getByText('Viive ei saatavilla').first()).toBeVisible();
+  // No simulated alert cards or actions in live mode.
+  await expect(page.getByText(/Koulutusskenaario — ei todellisia toimenpiteitä/)).toHaveCount(0);
+  await audit(page, 'live');
+});
+
+test('offline live mode: no silent fallback, banner offers scenario', async ({ page }) => {
+  await page.getByRole('button', { name: /Digitraffic live/ }).click();
+  const banner = page.getByTestId('data-state-banner');
+  await expect(banner).toBeVisible();
+  await expect(page.getByTestId('data-source-badge')).toHaveAttribute('data-state', 'offline');
+  await expect(page.getByRole('row', { name: /IC 27/ })).toHaveCount(0);
+  await audit(page, 'offline');
+  await banner.getByRole('button', { name: /koulutusskenaarioon|training scenario/i }).click();
+  await expect(page.getByTestId('data-source-badge')).toHaveAttribute('data-state', 'scenario');
+  await expect(page.getByText(/Koulutusskenaario — ei todellisia toimenpiteitä/)).toBeVisible();
+});
+
+test('stale state after 60 s without a successful update', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('./');
+  await page.unroute('**/rata.digitraffic.fi/**');
+  let ok = true;
+  await page.route('**/rata.digitraffic.fi/**', (r) => (ok ? r.fulfill({ json: LIVE_FIXTURE }) : r.abort()));
+  await page.getByRole('button', { name: /Digitraffic live/ }).click();
+  await expect(page.getByTestId('data-source-badge')).toHaveAttribute('data-state', 'live');
+  ok = false;
+  await page.clock.runFor(75_000);
+  await expect(page.getByTestId('data-source-badge')).toHaveAttribute('data-state', 'stale');
+  await expect(page.getByTestId('data-state-banner')).toContainText(/vanhentunutta|stale/i);
+});
+
+test('components.html: Lit elements work without React', async ({ page }) => {
+  await page.goto('./components.html');
+  const tabs = page.getByRole('tab');
+  await expect(tabs).toHaveCount(3);
+  await tabs.first().focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Panel: stations')).toBeVisible();
+  const sw = page.getByRole('switch', { name: 'Reduce motion' });
+  await sw.click();
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('#toggle-out')).toHaveText('checked: true');
+  await audit(page, 'components.html');
+});

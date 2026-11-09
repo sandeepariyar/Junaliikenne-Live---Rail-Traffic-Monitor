@@ -17,6 +17,8 @@ export interface RailMapProps {
   focusMode: boolean;
   reducedMotion: boolean;
   language: Language;
+  /** Hides scenario-only overlays in live mode. */
+  isLive?: boolean;
 }
 
 const ctrlBtn =
@@ -41,10 +43,12 @@ export const RailMap: React.FC<RailMapProps> = (props) => {
             {trains.length} {fi ? 'junaa' : 'trains'}
           </span>
         </div>
-        <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-[#2A2214]/95 border border-[#F0A030]/50 text-xs text-[#F0A030]">
-          <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
-          <span className="font-medium truncate">{t.tampereHubNotice}</span>
-        </div>
+        {!props.isLive && (
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-[8px] bg-[#2A2214]/95 border border-[#F0A030]/50 text-xs text-[#F0A030]">
+            <AlertCircle size={14} className="shrink-0" aria-hidden="true" />
+            <span className="font-medium truncate">{fi ? 'Skenaario' : 'Scenario'} · {t.tampereHubNotice}</span>
+          </div>
+        )}
       </div>
 
       <div className="relative flex-1 min-h-0">

@@ -1,12 +1,15 @@
 import React from 'react';
 import { createComponent } from '@lit/react';
 
-// Import custom elements to ensure registration
+// Importing the element modules registers the custom elements (<ft-*>).
 import { FtStatusBadgeElement } from './FtStatusBadgeElement';
 import { FtAlertCardElement } from './FtAlertCardElement';
 import { FtTabsElement } from './FtTabsElement';
 import { FtToggleElement } from './FtToggleElement';
 import { FtSegmentedControlElement } from './FtSegmentedControlElement';
+
+export type { LitTabItem } from './FtTabsElement';
+export type { StatusBadgeVariant } from './FtStatusBadgeElement';
 
 export {
   FtStatusBadgeElement,
@@ -16,8 +19,12 @@ export {
   FtSegmentedControlElement,
 };
 
-// React component wrappers via @lit/react for seamless integration
-export const FtStatusBadgeWC = createComponent({
+/*
+ * React wrappers generated with @lit/react — the same pattern Fintraffic's
+ * fds-coreui-components-react uses. One implementation (the Lit element),
+ * consumed by React here and by plain HTML in /components.html.
+ */
+export const FtStatusBadge = createComponent({
   tagName: 'ft-status-badge',
   elementClass: FtStatusBadgeElement,
   react: React,
@@ -33,7 +40,7 @@ export const FtAlertCardWC = createComponent({
   },
 });
 
-export const FtTabsWC = createComponent({
+export const FtTabs = createComponent({
   tagName: 'ft-tabs',
   elementClass: FtTabsElement,
   react: React,
@@ -42,7 +49,7 @@ export const FtTabsWC = createComponent({
   },
 });
 
-export const FtToggleWC = createComponent({
+export const FtToggle = createComponent({
   tagName: 'ft-toggle',
   elementClass: FtToggleElement,
   react: React,

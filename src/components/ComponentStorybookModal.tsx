@@ -1,10 +1,8 @@
 import { useModalA11y } from '../hooks/useModalA11y';
 import React, { useState } from 'react';
 import { X, Layers, Code, CheckCircle, ShieldCheck, Eye } from 'lucide-react';
-import { FtStatusBadge } from './design-system/FtStatusBadge';
 import { FtAlertCard } from './design-system/FtAlertCard';
-import { FtTabs } from './design-system/FtTabs';
-import { FtToggle } from './design-system/FtToggle';
+import { FtStatusBadge, FtTabs, FtToggle } from './web-components';
 import { FtSegmentedControl } from './design-system/FtSegmentedControl';
 
 export interface ComponentStorybookModalProps {
@@ -50,7 +48,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
                 Figma & Lit Web Components – Design System Docs
               </h2>
               <p className="text-xs text-[#9BA9B8]">
-                Design tokens, Shadow DOM components, text contrast ≥ 4.5:1 (checked with axe-core), keyboard operable.
+                Lit custom elements (Shadow DOM) used in this dashboard through @lit/react wrappers. Text contrast checked with axe-core; keyboard operable.
               </p>
             </div>
           </div>
@@ -110,12 +108,15 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
 
             <div className="pt-4 border-t border-[#243444] mt-4">
               <div className="p-2.5 rounded-[6px] bg-[#0E141B] border border-[#243444] space-y-1">
-                <span className="text-[10px] font-bold text-[#3FB950] flex items-center gap-1 uppercase">
-                  <ShieldCheck size={12} /> WCAG 2.2 AA Pass
+                <span className="text-[10px] font-bold text-[#80BDFF] flex items-center gap-1 uppercase">
+                  <ShieldCheck size={12} aria-hidden="true" /> A11y status
                 </span>
                 <p className="text-[10px] text-[#9BA9B8]">
-                  Kontrasti #F2F5F7 / #16202A = 12.8:1. Icon + text kaikissa tiloissa.
+                  WCAG 2.2 AA targeted. Automated axe-core checks: 0 serious/critical violations (CI). Manual keyboard testing done; screen-reader testing in progress.
                 </p>
+                <a href={`${import.meta.env.BASE_URL}components.html`} className="text-[10px] text-[#80BDFF] underline">
+                  Same elements without React ↗
+                </a>
               </div>
             </div>
           </div>
@@ -136,6 +137,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
                 <div className="p-4 rounded-[8px] bg-[#0E141B] border border-[#243444] flex flex-wrap gap-4 items-center">
                   <FtStatusBadge variant="ok" text="Ajallaan" />
                   <FtStatusBadge variant="warning" delayMinutes={12} />
+                  <FtStatusBadge variant="neutral" text="Viive ei saatavilla" />
                   <FtStatusBadge variant="danger" text="Peruttu" />
                   <FtStatusBadge variant="info" text="Häiriö purettu" />
                 </div>
@@ -185,7 +187,7 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
                     &lt;ft-tabs&gt;
                   </h3>
                   <p className="text-xs text-[#9BA9B8] mt-1">
-                    WCAG 2.2 AA näppäimistöohjattava välilehtipalkki. Nuolinäppäimet siirtävät fokusta, näkyvä sininen fokusrengas.
+                    APG-välilehtimalli: nuolinäppäimet, Home ja End siirtävät fokusta, näkyvä fokusrengas.
                   </p>
                 </div>
 
@@ -196,9 +198,12 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
                       { id: 'two', label: 'Asemat', count: 12 },
                       { id: 'three', label: 'Häiriöt', count: 3 },
                     ]}
-                    activeId={testTab}
-                    onChange={setTestTab}
-                  />
+                    label="Esimerkkivälilehdet"
+                    activeTabId={testTab}
+                    onTabChange={(e: Event) => setTestTab((e as CustomEvent<{ activeId: string }>).detail.activeId)}
+                  >
+                    <p className="text-xs text-[#9BA9B8] p-2">Paneeli: {testTab}</p>
+                  </FtTabs>
                 </div>
               </div>
             )}
@@ -216,9 +221,9 @@ export const ComponentStorybookModal: React.FC<ComponentStorybookModalProps> = (
 
                 <div className="p-4 rounded-[8px] bg-[#0E141B] border border-[#243444] flex items-center gap-6">
                   <FtToggle
-                    label="Fokustila"
+                    label="Fokustila (esimerkki)"
                     checked={testToggle}
-                    onChange={setTestToggle}
+                    onToggleChange={(e: Event) => setTestToggle((e as CustomEvent<{ checked: boolean }>).detail.checked)}
                   />
                   <FtSegmentedControl<'2D' | '3D'>
                     options={[

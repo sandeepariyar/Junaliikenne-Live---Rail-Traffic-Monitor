@@ -1,4 +1,5 @@
-export type TrainType = 'IC' | 'S' | 'HDM' | 'T';
+/** 'GPS' = live position only; the train-locations API does not report the train category. */
+export type TrainType = 'IC' | 'S' | 'HDM' | 'T' | 'GPS';
 
 export type TrainStatus = 'on_time' | 'delayed' | 'cancelled';
 
@@ -33,12 +34,14 @@ export interface Train {
   destination: string;
   scheduledTime: string;
   estimatedTime: string;
-  delayMinutes: number;
+  /** null = unavailable (live mode: train-locations has no schedule/delay data). */
+  delayMinutes: number | null;
   status: TrainStatus;
   currentStation: string;
   nextStation: string;
   speedKmH: number;
-  passengers: number;
+  /** null = unavailable (no passenger data in any public API used here). */
+  passengers: number | null;
   progressPercent: number; // 0 - 100 along route
   x: number;
   y: number;
@@ -49,6 +52,10 @@ export interface Train {
   travelDir?: 1 | -1;
   connectingTrains?: string[];
   operatorNotes?: string;
+  /** Where this record comes from. */
+  source?: 'scenario' | 'live';
+  /** ISO timestamp of the GPS fix (live only). */
+  gpsTimestamp?: string;
 }
 
 export interface AlertCardItem {

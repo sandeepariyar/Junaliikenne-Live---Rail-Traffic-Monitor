@@ -194,7 +194,7 @@ export const ThreeDLiveMap: React.FC<ThreeDLiveMapProps> = ({
         const cancelled = t.status === 'cancelled';
         const color = cancelled ? 0xf25555 : TRAIN_COLORS[t.type];
         const mesh = new THREE.Mesh(trainGeo, new THREE.MeshBasicMaterial({ color }));
-        const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: t.delayMinutes > 0 ? 0xf0a030 : color, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
+        const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: (t.delayMinutes ?? 0) > 0 ? 0xf0a030 : color, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }));
         mesh.userData = { train: t.id };
         trainGroup.add(mesh, halo); pickables.push(mesh);
         return { t, mesh, halo };

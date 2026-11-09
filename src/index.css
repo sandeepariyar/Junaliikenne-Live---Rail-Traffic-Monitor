@@ -54,7 +54,7 @@ body {
   background: #354a5e;
 }
 
-/* Accessibility Focus Ring (WCAG 2.2 AA compliant high contrast) */
+/* Accessibility focus ring: high-contrast, visible (targets WCAG 2.2 SC 2.4.7 / 2.4.11) */
 *:focus-visible {
   outline: 2px solid #4DA3FF !important;
   outline-offset: 2px !important;
@@ -97,3 +97,9 @@ body {
   white-space: nowrap;
 }
 .ft-3d-label.hub { color: #F0A030; }
+
+/* Styling the Lit <ft-tabs> from the outside through its exposed shadow parts */
+ft-tabs.ft-panel-tabs::part(tablist) {
+  padding: 0 12px;
+  background: #16202A;
+}

@@ -8,6 +8,7 @@ import { ShiftSummaryCard } from './components/ShiftSummaryCard';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { TrainDetailModal } from './components/TrainDetailModal';
 import { ComponentStorybookModal } from './components/ComponentStorybookModal';
+import { DataStateBanner } from './components/DataSourceBadge';
 import { railStore } from './store/railStore';
 import { Train, Station, AlertCardItem, ViewMode, Language, TrafficTab } from './types';
 import { CheckCircle2, Layers } from 'lucide-react';
@@ -33,8 +34,7 @@ export default function App() {
       }
     };
     window.addEventListener('keydown', onKey);
-    // Attempt live Digitraffic API poll
-    railStore.fetchLiveDigitrafficData();
+    // The app starts in the training scenario; live data is fetched only after the user selects live mode.
 
     return () => {
       railStore.removeEventListener('state-changed', handleStateChange);
@@ -85,7 +85,9 @@ export default function App() {
         onViewModeChange={(m: ViewMode) => railStore.setViewMode(m)}
         dataSourceMode={state.dataSourceMode}
         onDataSourceModeChange={(d) => railStore.setDataSourceMode(d)}
-        lastSyncTime={state.lastSyncTime}
+        dataState={state.dataState}
+        lastLiveSuccess={state.lastLiveSuccess}
+        lastGpsTimestamp={state.lastGpsTimestamp}
         focusMode={state.focusMode}
         onFocusModeChange={(f: boolean) => railStore.setFocusMode(f)}
         reducedMotion={state.reducedMotion}
@@ -95,8 +97,18 @@ export default function App() {
         onOpenSearch={() => setIsSearchOpen(true)}
       />
 
+      <DataStateBanner
+        state={state.dataState}
+        lastLiveSuccess={state.lastLiveSuccess}
+        liveError={state.liveError}
+        language={state.language}
+        onRetry={() => railStore.retryLive()}
+        onSwitchToScenario={() => railStore.setDataSourceMode('scenario')}
+      />
+
       {/* 2. "Huomio nyt" Row (attention now) with 3 ranked alert cards */}
       <AttentionNowRow
+        dataState={state.dataState}
         alerts={state.alerts}
         selectedAlertId={state.selectedAlertId}
         onSelectAlert={handleSelectAlert}
@@ -112,6 +124,7 @@ export default function App() {
           className="w-[60%] h-full flex flex-col relative"
         >
           <RailMap
+            isLive={state.dataSourceMode === 'live'}
             viewMode={state.viewMode}
             stations={state.stations}
             tracks={state.tracks}
@@ -132,6 +145,7 @@ export default function App() {
           className="w-[40%] h-full flex flex-col bg-[#16202A]"
         >
           <TrafficStatusPanel
+            isLive={state.dataSourceMode === 'live'}
             activeTab={state.activeTab}
             onTabChange={(tab: TrafficTab) => railStore.setActiveTab(tab)}
             trains={state.trains}
@@ -151,6 +165,7 @@ export default function App() {
         {/* 5. Bottom left: Timeline slider with play button */}
         <div className="w-[60%] h-full border-r border-[#243444]">
           <TimelineReplay
+            disabled={state.dataSourceMode === 'live'}
             replayMinutes={state.replayMinutes}
             isPlaying={state.isReplayPlaying}
             onTogglePlay={() => railStore.toggleReplayPlay()}
@@ -162,6 +177,7 @@ export default function App() {
         {/* 6. Bottom right: "Vuoron yhteenveto" card */}
         <div className="w-[40%] h-full relative">
           <ShiftSummaryCard
+            isLive={state.dataSourceMode === 'live'}
             language={state.language}
             trains={state.trains}
             disturbances={state.disturbances}
@@ -197,6 +213,7 @@ export default function App() {
         train={inspectTrain}
         onClose={() => setInspectTrain(null)}
         onHoldConnection={() => railStore.executeAlertAction('alert-1')}
+        isScenario={state.dataSourceMode === 'scenario'}
         language={state.language}
       />
 

@@ -1,19 +1,20 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-export type StatusBadgeVariant = 'ok' | 'warning' | 'danger' | 'info';
+export type StatusBadgeVariant = 'ok' | 'warning' | 'danger' | 'info' | 'neutral';
 
 /**
  * <ft-status-badge>
- * Standards-compliant Lit Web Component
- * Features Shadow DOM, design tokens via CSS custom properties, and WCAG 2.2 AA accessibility.
+ * Lit Web Component
+ * Shadow DOM, colours from CSS custom properties with fallbacks.
+ * `neutral` is used when a value is unavailable (e.g. no delay data in live mode).
  * Rule: Always pairs an explicit icon with legible text, NEVER color alone.
  */
 @customElement('ft-status-badge')
 export class FtStatusBadgeElement extends LitElement {
   @property({ type: String }) variant: StatusBadgeVariant = 'ok';
   @property({ type: String }) text: string = '';
-  @property({ type: Number }) delayMinutes: number | undefined = undefined;
+  @property({ type: Number, attribute: 'delay-minutes' }) delayMinutes: number | undefined = undefined;
   @property({ type: String }) size: 'sm' | 'md' = 'md';
 
   static override styles = css`
@@ -73,6 +74,13 @@ export class FtStatusBadgeElement extends LitElement {
       border-color: rgba(77, 163, 255, 0.4);
     }
 
+    .variant-neutral {
+      background-color: rgba(155, 169, 184, 0.12);
+      color: #B6C2CF;
+      border-color: rgba(155, 169, 184, 0.4);
+      border-style: dashed;
+    }
+
     svg {
       flex-shrink: 0;
       display: block;
@@ -107,8 +115,6 @@ export class FtStatusBadgeElement extends LitElement {
     return html`
       <span
         class="badge size-${this.size} variant-${effectiveVariant}"
-        role="status"
-        aria-label="${effectiveLabel}"
       >
         ${this.renderIcon(effectiveVariant, iconSize)}
         <span>${effectiveLabel}</span>
@@ -136,6 +142,12 @@ export class FtStatusBadgeElement extends LitElement {
           <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        `;
+      case 'neutral':
+        return html`
+          <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <line x1="6" y1="12" x2="18" y2="12"></line>
           </svg>
         `;
       case 'info':

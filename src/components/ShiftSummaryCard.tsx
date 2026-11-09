@@ -9,6 +9,7 @@ export interface ShiftSummaryCardProps {
   trains: Train[];
   disturbances: DisturbanceReport[];
   onOpenReportModal?: () => void;
+  isLive?: boolean;
 }
 
 export const ShiftSummaryCard: React.FC<ShiftSummaryCardProps> = ({
@@ -16,9 +17,14 @@ export const ShiftSummaryCard: React.FC<ShiftSummaryCardProps> = ({
   trains,
   disturbances,
   onOpenReportModal,
+  isLive = false,
 }) => {
   const t = TRANSLATIONS[language];
-  const summary = summarizeShift(trains, disturbances, language);
+  const summary = isLive
+    ? language === 'fi'
+      ? { headline: `${trains.length} junaa GPS-seurannassa.`, detail: 'Täsmällisyyttä ei lasketa: train-locations-rajapinnassa ei ole aikataulu- tai viivetietoa.', punctuality: NaN }
+      : { headline: `${trains.length} trains with a GPS position.`, detail: 'Punctuality is not calculated: the train-locations API has no timetable or delay data.', punctuality: NaN }
+    : summarizeShift(trains, disturbances, language);
   void onOpenReportModal;
   const [copied, setCopied] = useState(false);
 
@@ -27,7 +33,7 @@ export const ShiftSummaryCard: React.FC<ShiftSummaryCardProps> = ({
 ${new Date().toLocaleString(language === 'fi' ? 'fi-FI' : 'en-GB')}
 ${summary.headline}
 ${summary.detail}
-(${language === 'fi' ? 'Esimerkkiaineisto' : 'Example data'})`;
+(${isLive ? 'Digitraffic train-locations' : language === 'fi' ? 'Koulutusskenaario, simuloitu' : 'Training scenario, simulated'})`;
     navigator.clipboard?.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -62,7 +68,9 @@ ${summary.detail}
       {/* Footer Quick Action: Copy handover note or expand */}
       <div className="flex items-center justify-between pt-1 border-t border-[#243444]/60 text-[11px]">
         <span className="text-[#9BA9B8] font-mono">
-          {language === 'fi' ? 'Sääntöpohjainen · esimerkkiaineisto' : 'Rule-based · example data'}
+          {isLive
+            ? language === 'fi' ? 'Sääntöpohjainen · Digitraffic GPS' : 'Rule-based · Digitraffic GPS'
+            : language === 'fi' ? 'Sääntöpohjainen · simuloitu skenaario' : 'Rule-based · simulated scenario'}
         </span>
         <button
           type="button"

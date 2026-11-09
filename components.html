@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ft-* Web Components without React – Junaliikenne Live</title>
+    <style>
+      :root { color-scheme: dark; --text-primary: #F2F5F7; --text-secondary: #9BA9B8; --color-info: #4DA3FF; --border-subtle: #243444; --surface-raised: #1C2836; }
+      body { margin: 0; background: #0E141B; color: #F2F5F7; font: 14px/1.5 Inter, system-ui, sans-serif; }
+      main { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 32px 0 8px; font-family: 'JetBrains Mono', monospace; color: #80BDFF; }
+      p, li { color: #B6C2CF; }
+      .card { background: #16202A; border: 1px solid #243444; border-radius: 10px; padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      pre { background: #111822; border: 1px solid #243444; border-radius: 8px; padding: 12px; overflow: auto; color: #9BA9B8; font-size: 12px; }
+      output { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #F2F5F7; }
+      a { color: #80BDFF; }
+      .panel-text { padding: 10px 4px; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>ft-* Lit Web Components — plain HTML, no React</h1>
+      <p>
+        These are the same custom elements the <a href="./">Junaliikenne Live dashboard</a> uses through
+        <code>@lit/react</code> wrappers. Here they run as plain HTML with a few lines of vanilla JavaScript,
+        which is the point of a framework-agnostic design system.
+      </p>
+
+      <h2>&lt;ft-status-badge&gt;</h2>
+      <div class="card">
+        <ft-status-badge variant="ok" text="Ajallaan"></ft-status-badge>
+        <ft-status-badge delay-minutes="7"></ft-status-badge>
+        <ft-status-badge delay-minutes="22"></ft-status-badge>
+        <ft-status-badge variant="danger" text="Peruttu"></ft-status-badge>
+        <ft-status-badge variant="neutral" text="Delay unavailable"></ft-status-badge>
+      </div>
+      <pre>&lt;ft-status-badge delay-minutes="7"&gt;&lt;/ft-status-badge&gt;
+&lt;ft-status-badge variant="neutral" text="Delay unavailable"&gt;&lt;/ft-status-badge&gt;</pre>
+
+      <h2>&lt;ft-tabs&gt;</h2>
+      <div class="card" style="display:block">
+        <ft-tabs id="tabs" label="Example tabs" active-tab-id="delays">
+          <p class="panel-text" id="tab-panel-text">Panel: delays</p>
+        </ft-tabs>
+      </div>
+      <pre>const tabs = document.querySelector('ft-tabs');
+tabs.tabs = [{ id: 'delays', label: 'Delays', count: 4 }, …];
+tabs.addEventListener('tab-change', (e) =&gt; render(e.detail.activeId));</pre>
+
+      <h2>&lt;ft-toggle&gt;</h2>
+      <div class="card">
+        <ft-toggle id="toggle" label="Reduce motion"></ft-toggle>
+        <output id="toggle-out" aria-live="polite">checked: false</output>
+      </div>
+      <pre>toggle.addEventListener('toggle-change', (e) =&gt; console.log(e.detail.checked));</pre>
+
+      <h2>&lt;ft-segmented-control&gt;</h2>
+      <div class="card">
+        <ft-segmented-control id="seg"></ft-segmented-control>
+        <output id="seg-out" aria-live="polite">value: 2D</output>
+      </div>
+
+      <p style="margin-top:32px">Source: <a href="https://github.com/sandeepariyar/Junaliikenne-Live---Rail-Traffic-Monitor/tree/main/src/components/web-components">src/components/web-components</a></p>
+    </main>
+    <script type="module" src="/src/components-demo.ts"></script>
+  </body>
+</html>

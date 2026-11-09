@@ -10,8 +10,8 @@ export interface ShiftSummary { headline: string; detail: string; punctuality: n
 export function summarizeShift(trains: Train[], disturbances: DisturbanceReport[], lang: Language): ShiftSummary {
   const running = trains.filter((t) => t.status !== 'cancelled');
   const cancelled = trains.length - running.length;
-  const delayed = running.filter((t) => t.delayMinutes >= 3);
-  const worst = [...delayed].sort((a, b) => b.delayMinutes - a.delayMinutes)[0];
+  const delayed = running.filter((t) => (t.delayMinutes ?? 0) >= 3);
+  const worst = [...delayed].sort((a, b) => (b.delayMinutes ?? 0) - (a.delayMinutes ?? 0))[0];
   const punctuality = trains.length ? Math.round(((running.length - delayed.length) / trains.length) * 1000) / 10 : 100;
   const active = disturbances.filter((d) => d.status !== 'resolving');
   const high = active.filter((d) => d.severity === 'high');
@@ -21,7 +21,7 @@ export function summarizeShift(trains: Train[], disturbances: DisturbanceReport[
       ? 'Liikenne kulkee aikataulussa.'
       : `${delayed.length} myöhässä, ${cancelled} peruttu${high.length ? `, ${high.length} vakavaa häiriötä` : ''}.`;
     const detail = worst
-      ? `Suurin viive: ${worst.number} (${worst.route}) +${worst.delayMinutes} min. Täsmällisyys ${punctuality} %.`
+      ? `Suurin viive: ${worst.number} (${worst.route}) +${worst.delayMinutes ?? 0} min. Täsmällisyys ${punctuality} %.`
       : `Täsmällisyys ${punctuality} %.`;
     return { headline, detail, punctuality };
   }
@@ -29,7 +29,7 @@ export function summarizeShift(trains: Train[], disturbances: DisturbanceReport[
     ? 'Traffic is running on schedule.'
     : `${delayed.length} delayed, ${cancelled} cancelled${high.length ? `, ${high.length} high-severity disturbances` : ''}.`;
   const detail = worst
-    ? `Largest delay: ${worst.number} (${worst.route}) +${worst.delayMinutes} min. Punctuality ${punctuality}%.`
+    ? `Largest delay: ${worst.number} (${worst.route}) +${worst.delayMinutes ?? 0} min. Punctuality ${punctuality}%.`
     : `Punctuality ${punctuality}%.`;
   return { headline, detail, punctuality };
 }

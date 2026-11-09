@@ -2,7 +2,8 @@ import { useModalA11y } from '../hooks/useModalA11y';
 import React from 'react';
 import { X, Train as TrainIcon, Clock, Users, Gauge, ArrowRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Train, Language } from '../types';
-import { FtStatusBadge } from './design-system/FtStatusBadge';
+import { FtStatusBadge } from './web-components';
+import { trainStatus, unavailable } from '../lib/trainStatus';
 import { FtButton } from './design-system/FtButton';
 
 export interface TrainDetailModalProps {
@@ -10,6 +11,8 @@ export interface TrainDetailModalProps {
   onClose: () => void;
   onHoldConnection?: (connectingTrainId: string) => void;
   language: Language;
+  /** Training actions are offered only in the simulated scenario. */
+  isScenario?: boolean;
 }
 
 export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
@@ -17,6 +20,7 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
   onClose,
   onHoldConnection,
   language,
+  isScenario = true,
 }) => {
   const dialogRef = useModalA11y<HTMLDivElement>(!!train, onClose);
 
@@ -47,14 +51,18 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
                 <h2 className="text-base font-bold text-[#F2F5F7] font-mono">
                   {train.number}
                 </h2>
-                <FtStatusBadge
-                  variant={train.status === 'cancelled' ? 'danger' : train.delayMinutes > 0 ? 'warning' : 'ok'}
-                  delayMinutes={train.delayMinutes}
-                  text={train.status === 'cancelled' ? 'Peruttu' : undefined}
-                  size="sm"
-                />
+                <FtStatusBadge {...trainStatus(train, language)} size="sm" />
               </div>
               <p className="text-xs text-[#9BA9B8] mt-0.5">{train.route}</p>
+              <p className="text-[11px] font-mono mt-0.5 text-[#B6C2CF]" data-testid="train-source">
+                {train.source === 'live'
+                  ? language === 'fi'
+                    ? `Lähde: Digitraffic GPS · ${train.gpsTimestamp ? new Date(train.gpsTimestamp).toLocaleTimeString('fi-FI') : ''}`
+                    : `Source: Digitraffic GPS · ${train.gpsTimestamp ? new Date(train.gpsTimestamp).toLocaleTimeString('en-GB') : ''}`
+                  : language === 'fi'
+                  ? 'Lähde: koulutusskenaario (simuloitu)'
+                  : 'Source: training scenario (simulated)'}
+              </p>
             </div>
           </div>
           <button
@@ -84,7 +92,11 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
                 <Users size={12} /> Matkustajat
               </span>
               <span className="text-base font-bold text-[#F2F5F7] font-mono mt-1">
-                {train.passengers} <span className="text-xs font-normal text-[#9BA9B8]">hlö</span>
+                {train.passengers === null ? (
+                  <span className="text-xs font-semibold text-[#B6C2CF]">{unavailable(language)}</span>
+                ) : (
+                  <>{train.passengers} <span className="text-xs font-normal text-[#9BA9B8]">hlö</span></>
+                )}
               </span>
             </div>
 
@@ -92,9 +104,13 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
               <span className="text-[10px] uppercase font-mono text-[#9BA9B8] flex items-center gap-1">
                 <Clock size={12} /> Viive
               </span>
-              <span className={`text-base font-bold font-mono mt-1 ${train.delayMinutes > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}`}>
-                {train.status === 'cancelled' ? 'Peruttu' : `+${train.delayMinutes} min`}
-              </span>
+              {train.delayMinutes === null && train.status !== 'cancelled' ? (
+                <span className="text-xs font-semibold mt-1 text-[#B6C2CF]">{unavailable(language)}</span>
+              ) : (
+                <span className={`text-base font-bold font-mono mt-1 ${(train.delayMinutes ?? 0) > 0 ? 'text-[#F0A030]' : 'text-[#3FB950]'}`}>
+                  {train.status === 'cancelled' ? 'Peruttu' : `+${train.delayMinutes} min`}
+                </span>
+              )}
             </div>
           </div>
 
@@ -153,7 +169,7 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
           <FtButton variant="subtle" size="sm" onClick={onClose}>
             Sulje
           </FtButton>
-          {train.id === 'ic-27' && (
+          {isScenario && train.id === 'ic-27' && (
             <FtButton
               variant="primary"
               size="sm"
@@ -162,7 +178,7 @@ export const TrainDetailModal: React.FC<TrainDetailModalProps> = ({
                 onClose();
               }}
             >
-              Pidä vaihtojunaa S 365 3 min
+              Harjoitus: pidä S 365 3 min
             </FtButton>
           )}
         </div>

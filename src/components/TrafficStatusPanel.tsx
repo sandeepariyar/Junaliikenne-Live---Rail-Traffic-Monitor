@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Search, ArrowUpDown, AlertCircle, Building2, ShieldAlert } from 'lucide-react';
 import { Train, Station, DisturbanceReport, TrafficTab, Language } from '../types';
-import { FtTabs } from './design-system/FtTabs';
-import { FtStatusBadge } from './design-system/FtStatusBadge';
+import { FtTabs, FtStatusBadge } from './web-components';
+import { trainStatus } from '../lib/trainStatus';
 import { FtTableRow } from './design-system/FtTableRow';
 import { TRANSLATIONS } from '../data/railData';
 
@@ -17,6 +17,8 @@ export interface TrafficStatusPanelProps {
   selectedStationId: string | null;
   onSelectStation: (station: Station) => void;
   language: Language;
+  /** Live mode: scenario-only station metrics are hidden. */
+  isLive?: boolean;
 }
 
 export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
@@ -30,6 +32,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
   selectedStationId,
   onSelectStation,
   language,
+  isLive = false,
 }) => {
   const t = TRANSLATIONS[language];
   const [filterText, setFilterText] = useState('');
@@ -38,7 +41,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
 
   // Tab definitions
   const tabs = [
-    { id: 'delays', label: t.tabDelays, count: trains.filter((tr) => tr.delayMinutes > 0 || tr.status === 'cancelled').length },
+    { id: 'delays', label: t.tabDelays, count: isLive ? trains.length : trains.filter((tr) => (tr.delayMinutes ?? 0) > 0 || tr.status === 'cancelled').length },
     { id: 'stations', label: t.tabStations, count: stations.length },
     { id: 'disturbances', label: t.tabDisturbances, count: disturbances.length },
   ];
@@ -56,8 +59,8 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
 
     result.sort((a, b) => {
       if (sortField === 'delay') {
-        const aVal = a.status === 'cancelled' ? 999 : a.delayMinutes;
-        const bVal = b.status === 'cancelled' ? 999 : b.delayMinutes;
+        const aVal = a.status === 'cancelled' ? 999 : a.delayMinutes ?? -1;
+        const bVal = b.status === 'cancelled' ? 999 : b.delayMinutes ?? -1;
         return sortAsc ? aVal - bVal : bVal - aVal;
       }
       if (sortField === 'number') {
@@ -84,8 +87,8 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
       className="w-full h-full bg-[#16202A] flex flex-col overflow-hidden select-none"
     >
       {/* Panel Header */}
-      <div className="p-3 border-b border-[#243444] bg-[#16202A] shrink-0">
-        <div className="flex items-center justify-between gap-2 mb-2.5">
+      <div className="px-3 pt-3 bg-[#16202A] shrink-0">
+        <div className="flex items-center justify-between gap-2 mb-1">
           <h2 className="text-sm font-bold text-[#F2F5F7] tracking-tight">
             {t.trafficStatus}
           </h2>
@@ -94,20 +97,19 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
           </span>
         </div>
 
-        {/* Design System Tabs (First tab selected, visible keyboard focus ring) */}
-        <FtTabs
-          tabs={tabs}
-          activeId={activeTab}
-          onChange={(id) => onTabChange(id as TrafficTab)}
-        />
       </div>
 
+      {/* <ft-tabs> Lit element via @lit/react; the active panel is slotted into its role="tabpanel". */}
+      <FtTabs
+        className="ft-panel-tabs flex-1 min-h-0"
+        label={language === 'fi' ? 'Junaliikenteen tilanne välilehdet' : 'Traffic status tabs'}
+        tabs={tabs}
+        activeTabId={activeTab}
+        onTabChange={(e: Event) => onTabChange((e as CustomEvent<{ activeId: string }>).detail.activeId as TrafficTab)}
+      >
       {/* Tab Panel Content: Myöhästymiset (Delays) */}
       {activeTab === 'delays' && (
         <div
-          id="tabpanel-delays"
-          role="tabpanel"
-          aria-labelledby="tab-delays"
           className="flex-1 flex flex-col min-h-0"
         >
           {/* Quick Filter Bar */}
@@ -182,32 +184,16 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
                         <div className="text-[#F2F5F7] font-medium">
                           {train.estimatedTime}
                         </div>
-                        <div className="text-[10px] text-[#9BA9B8]">
-                          Aikataulu: {train.scheduledTime}
-                        </div>
+                        {!isLive && (
+                          <div className="text-[10px] text-[#9BA9B8]">
+                            Aikataulu: {train.scheduledTime}
+                          </div>
+                        )}
                       </td>
 
                       {/* Column 4: Tila (Always icon + text, never color alone) */}
                       <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                        {train.status === 'cancelled' ? (
-                          <FtStatusBadge
-                            variant="danger"
-                            text={t.statusCancelled}
-                            size="sm"
-                          />
-                        ) : train.delayMinutes > 0 ? (
-                          <FtStatusBadge
-                            variant={train.delayMinutes >= 15 ? 'danger' : 'warning'}
-                            delayMinutes={train.delayMinutes}
-                            size="sm"
-                          />
-                        ) : (
-                          <FtStatusBadge
-                            variant="ok"
-                            text={t.statusOnTime}
-                            size="sm"
-                          />
-                        )}
+                        <FtStatusBadge {...trainStatus(train, language)} size="sm" />
                       </td>
                     </FtTableRow>
                   );
@@ -221,13 +207,12 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
       {/* Tab Panel Content: Asemat (Stations) */}
       {activeTab === 'stations' && (
         <div
-          id="tabpanel-stations"
-          role="tabpanel"
-          aria-labelledby="tab-stations"
           className="flex-1 flex flex-col min-h-0 overflow-y-auto"
         >
           <div className="p-3 border-b border-[#243444]/60 bg-[#111822]/40 text-xs text-[#9BA9B8]">
-            Asemakapasiteetti ja ratapihan viiveindeksi
+            {isLive
+              ? language === 'fi' ? 'Asemat (Digitraffic-metatiedot). Junamäärä ja viiveindeksi vain koulutusskenaariossa.' : 'Stations (Digitraffic metadata). Train count and delay index exist only in the training scenario.'
+              : language === 'fi' ? 'Asemakapasiteetti ja ratapihan viiveindeksi (simuloitu)' : 'Station capacity and yard delay index (simulated)'}
           </div>
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 bg-[#16202A] border-b border-[#243444] z-10 text-[11px] font-semibold text-[#9BA9B8] uppercase tracking-wider">
@@ -263,10 +248,10 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
                       {st.tracks}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-center text-[#F2F5F7]">
-                      {st.activeTrainsCount}
+                      {isLive ? '—' : st.activeTrainsCount}
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <span
+                      {isLive ? <span className="text-[11px] text-[#B6C2CF]">{language === 'fi' ? 'Ei saatavilla' : 'Unavailable'}</span> : <span
                         className={`font-mono text-xs font-bold px-2 py-0.5 rounded-[4px] ${
                           st.delayIndex > 50
                             ? 'bg-[#F25555]/15 text-[#FF8080]'
@@ -276,7 +261,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
                         }`}
                       >
                         {st.delayIndex} / 100
-                      </span>
+                      </span>}
                     </td>
                   </FtTableRow>
                 );
@@ -289,11 +274,15 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
       {/* Tab Panel Content: Häiriöt (Disturbances) */}
       {activeTab === 'disturbances' && (
         <div
-          id="tabpanel-disturbances"
-          role="tabpanel"
-          aria-labelledby="tab-disturbances"
           className="flex-1 p-3 flex flex-col gap-2.5 min-h-0 overflow-y-auto"
         >
+          {disturbances.length === 0 && (
+            <p className="text-xs text-[#B6C2CF] p-2">
+              {isLive
+                ? language === 'fi' ? 'Live-tilassa ei ole kytketty häiriötietolähdettä. Häiriöitä ei keksitä.' : 'No disruption feed is connected in live mode. Disruptions are not invented.'
+                : language === 'fi' ? 'Ei häiriöitä.' : 'No disruptions.'}
+            </p>
+          )}
           {disturbances.map((dist) => (
             <div
               key={dist.id}
@@ -319,6 +308,7 @@ export const TrafficStatusPanel: React.FC<TrafficStatusPanelProps> = ({
           ))}
         </div>
       )}
+      </FtTabs>
     </aside>
   );
 };

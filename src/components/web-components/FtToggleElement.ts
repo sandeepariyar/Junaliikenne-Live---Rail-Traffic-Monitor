@@ -1,14 +1,20 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 
 /**
  * <ft-toggle>
- * Standards-compliant Lit Web Component for switches
+ * Lit Web Component for on/off settings (APG switch pattern).
+ * Optional leading icon via the `icon` slot.
  */
 @customElement('ft-toggle')
 export class FtToggleElement extends LitElement {
   @property({ type: String }) label: string = '';
   @property({ type: Boolean }) checked: boolean = false;
+  @state() private hasIcon = false;
+
+  private onIconSlot(e: Event) {
+    this.hasIcon = (e.target as HTMLSlotElement).assignedElements().length > 0;
+  }
 
   static override styles = css`
     :host {
@@ -33,6 +39,13 @@ export class FtToggleElement extends LitElement {
     .wrapper:hover {
       background-color: var(--surface-raised, #1C2836);
     }
+
+    .icon {
+      display: inline-flex;
+      color: var(--text-secondary, #9BA9B8);
+    }
+
+    .icon[hidden] { display: none; }
 
     .switch {
       position: relative;
@@ -81,6 +94,7 @@ export class FtToggleElement extends LitElement {
   override render() {
     return html`
       <div class="wrapper" @click="${this.toggle}">
+        <span class="icon" aria-hidden="true" ?hidden="${!this.hasIcon}"><slot name="icon" @slotchange="${this.onIconSlot}"></slot></span>
         <span>${this.label}</span>
         <button
           type="button"

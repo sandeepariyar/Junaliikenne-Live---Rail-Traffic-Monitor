@@ -8,6 +8,15 @@ export default defineConfig(() => {
     // GitHub Pages serves the app from /<repo>/
     base: process.env.VITE_BASE ?? '/Junaliikenne-Live---Rail-Traffic-Monitor/',
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        // Second page: the same Lit elements used without React.
+        input: {
+          main: path.resolve(import.meta.dirname, 'index.html'),
+          components: path.resolve(import.meta.dirname, 'components.html'),
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),

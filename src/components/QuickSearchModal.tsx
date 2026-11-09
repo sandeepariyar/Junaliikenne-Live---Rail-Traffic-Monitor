@@ -2,7 +2,8 @@ import { useModalA11y } from '../hooks/useModalA11y';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, Train as TrainIcon, Building2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Train, Station, DisturbanceReport, Language } from '../types';
-import { FtStatusBadge } from './design-system/FtStatusBadge';
+import { FtStatusBadge } from './web-components';
+import { trainStatus } from '../lib/trainStatus';
 
 export interface QuickSearchModalProps {
   isOpen: boolean;
@@ -129,12 +130,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <FtStatusBadge
-                        variant={tr.status === 'cancelled' ? 'danger' : tr.delayMinutes > 0 ? 'warning' : 'ok'}
-                        delayMinutes={tr.delayMinutes}
-                        text={tr.status === 'cancelled' ? 'Peruttu' : undefined}
-                        size="sm"
-                      />
+                      <FtStatusBadge {...trainStatus(tr, language)} size="sm" />
                       <ArrowRight size={14} className="text-[#9BA9B8] opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </button>
