@@ -72,7 +72,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   return (
     <header className="h-14 bg-[#16202A] border-b border-[#243444] px-4 flex items-center justify-between gap-3 select-none shrink-0 z-30">
       {/* 1. Left Zone: Train icon + Title + green "Live" dot + Data Source Toggle */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-2.5 shrink-0">
         <div className="w-8 h-8 rounded-[8px] bg-[#1C2836] border border-[#243444] flex items-center justify-center text-[#80BDFF]">
           <Train size={18} strokeWidth={2.2} aria-hidden="true" />
         </div>
@@ -121,7 +121,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* 2. Center Zone: Centered search field with Ctrl+K hint */}
-      <div className="flex-1 min-w-0 max-w-md mx-2">
+      <div className="flex-1 min-w-[200px] max-w-md mx-1">
         <button
           type="button"
           onClick={onOpenSearch}
@@ -139,7 +139,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* 3. Right Zone: Segmented control + Toggles + FI/EN + Clock */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Segmented control: 2D | 3D Elävä kartta */}
         <FtSegmentedControl<ViewMode>
           value={viewMode}
@@ -208,7 +208,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Clock with Finnish/European format */}
         <div className="flex items-baseline gap-1.5 pl-1 font-mono tabular-nums text-xs">
-          <span className="text-[#9BA9B8] text-[11px] capitalize">{dateStr}</span>
+          <span className="hidden 2xl:inline text-[#9BA9B8] text-[11px] capitalize">{dateStr}</span>
           <span className="text-[#F2F5F7] font-semibold text-sm bg-[#0E141B] px-2 py-0.5 rounded-[4px] border border-[#243444]">
             {timeStr}
           </span>

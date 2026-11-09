@@ -11,9 +11,9 @@ A concept operator dashboard for following rail traffic and disruptions in Finla
 
 ![Dashboard overview](docs/screenshot.png)
 
-| 2D network map | 3D terrain view |
-| --- | --- |
-| ![2D map](docs/map-2d.png) | ![3D map](docs/map-3d.png) |
+| Digitraffic live mode (real GPS; delay shown as unavailable) | 2D network map | 3D terrain view |
+| --- | --- | --- |
+| ![Live mode](docs/live-mode.png) | ![2D map](docs/map-2d.png) | ![3D map](docs/map-3d.png) |
 
 ## What it is
 
